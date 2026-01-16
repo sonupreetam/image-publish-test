@@ -56,4 +56,5 @@ jobs:
       registries: ghcr.io
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
-    secrets: inherit
+    secrets:
+      registry_token: ${{ secrets.GITHUB_TOKEN }}
