@@ -1,5 +1,5 @@
 # Minimal test image for workflow validation
-FROM alpine:3.22
+FROM alpine:3.23
 
 LABEL org.opencontainers.image.title="Test Image" \
       org.opencontainers.image.description="Minimal image for testing publish workflows" \
