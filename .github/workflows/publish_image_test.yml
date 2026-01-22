@@ -1,0 +1,52 @@
+# Publish Image Workflow
+# ======================
+# Builds and pushes container image to GHCR.
+
+name: Publish Image
+
+on:
+  push:
+    branches:
+      - '**'           # All branches (unprotected)
+      - '!main'        # Exclude main (typically protected)
+      - '!master'      # Exclude master (typically protected)
+    paths:
+      - 'Containerfile'
+      - '.github/workflows/publish_image_test.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'Containerfile'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild without cache'
+        required: false
+        default: false
+        type: boolean
+
+# Prevent concurrent builds for the same branch
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and Push Image
+    # Required permissions for the reusable workflow
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    uses: sonu/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
+    with:
+      component_name: 'image-publish-test'
+      containerfile_path: 'Containerfile'
+      context_path: '.'
+      image_name: '${{ github.repository }}'
+
+      image_description: 'Image publish test container'
+      image_vendor: 'sonu'
+      force_rebuild: ${{ inputs.force_rebuild || false }}
+      platforms: 'linux/amd64'
+    secrets: inherit
