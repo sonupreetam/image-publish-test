@@ -38,7 +38,7 @@ jobs:
       contents: read
       packages: write
       actions: read
-    uses: sonu/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
     with:
       component_name: 'image-publish-test'
       containerfile_path: 'Containerfile'
