@@ -31,8 +31,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate image name format
+        env:
+          IMAGE_NAME: ${{ github.repository }}
+        run: |
+          # Validate image name format (org/name)
+          if ! echo "$IMAGE_NAME" | grep -qE '^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$'; then
+            echo "::error::Invalid image_name format. Expected 'org/name', got '$IMAGE_NAME'."
+            exit 1
+          fi
+          echo "✓ Image name format valid: $IMAGE_NAME"
+
   publish:
     name: Build and Push Image
+    needs: validate
     # Required permissions for the reusable workflow
     permissions:
       contents: read
