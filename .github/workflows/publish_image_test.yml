@@ -2,7 +2,7 @@
 # ======================
 # Builds and pushes container image to GHCR.
 
-name: Publish Image
+name: Publish Image to GHCR
 
 on:
   push:
