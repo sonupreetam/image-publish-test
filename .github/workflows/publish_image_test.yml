@@ -1,6 +1,6 @@
 # Publish Image Workflow
 # ======================
-# Builds and pushes container image to GHCR.
+# Builds, scans, and pushes container image to GHCR.
 
 name: Publish Image to GHCR
 
