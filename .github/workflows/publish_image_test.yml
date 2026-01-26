@@ -106,7 +106,9 @@ jobs:
     name: Post-build Image Scan
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
+    if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
+      contents: read          # Required by reusable workflow
       contents: read          # Required by reusable workflow
       packages: write         # Attestation push
       security-events: write  # Upload SARIF
@@ -117,5 +119,6 @@ jobs:
       enable_trivy_source: false
       enable_trivy_image: true
       image_ref: ${{ needs.publish-image.outputs.image }}:sha-${{ github.sha }}
+      image_digest: ${{ needs.publish-image.outputs.digest }}
       trivy_severity: HIGH,CRITICAL
     secrets: inherit
