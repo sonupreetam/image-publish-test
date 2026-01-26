@@ -93,7 +93,6 @@ jobs:
       containerfile_path: 'Containerfile'
       context_path: '.'
       image_name: '${{ github.repository }}'
-
       image_description: 'Image publish test container'
       image_vendor: 'sonu'
       force_rebuild: ${{ inputs.force_rebuild || false }}
@@ -108,9 +107,11 @@ jobs:
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      packages: write       # Vuln attestation push
       security-events: write # Upload SARIF
-      id-token: write       # Keyless signing
+      contents: read
+      actions: read
+      packages: write         # Required for validation, won't be used
+      id-token: write         # Required for validation, won't be used
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
