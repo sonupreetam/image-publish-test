@@ -7,9 +7,7 @@ name: Publish Image to GHCR
 on:
   push:
     branches:
-      - '**'           # All branches (unprotected)
-      - '!main'        # Exclude main (typically protected)
-      - '!master'      # Exclude master (typically protected)
+      - '**'
     paths:
       - 'Containerfile'
       - '.github/workflows/publish_image_test.yml'
@@ -24,6 +22,14 @@ on:
         required: false
         default: false
         type: boolean
+      enable_trivy_source:
+        description: 'Enable Trivy source scan (secrets + misconfig)'
+        default: true
+        type: boolean
+      enable_trivy_image:
+        description: 'Enable Trivy image scan'
+        default: true
+        type: boolean
 
 # Prevent concurrent builds for the same branch
 concurrency:
@@ -31,6 +37,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Step 0: VALIDATE INPUTS
+  # ═══════════════════════════════════════════════════════════════════════════
   validate:
     name: Validate Inputs
     runs-on: ubuntu-latest
@@ -46,9 +55,31 @@ jobs:
           fi
           echo "✓ Image name format valid: $IMAGE_NAME"
 
-  publish:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Step 1: PRE-BUILD SOURCE SCANNING (shift-left security)
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Catches vulnerabilities BEFORE building—fail fast, save CI time.
+  scan-source:
+    name: Pre-build Source Scan
+    needs: [validate]
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: true
+      enable_trivy_source: true
+      enable_trivy_image: false
+      trivy_severity: HIGH,CRITICAL
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Step 2: BUILD AND PUSH (only if source scan passes)
+  # ═══════════════════════════════════════════════════════════════════════════
+  publish-image:
+    needs: [scan-source]
     name: Build and Push Image
-    needs: validate
     # Required permissions for the reusable workflow
     permissions:
       contents: read
@@ -65,4 +96,26 @@ jobs:
       image_vendor: 'sonu'
       force_rebuild: ${{ inputs.force_rebuild || false }}
       platforms: 'linux/amd64'
+    secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Step 3: POST-BUILD IMAGE SCANNING
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Scans the built image for OS package vulns, runtime deps, embedded secrets.
+  scan-image:
+    name: Post-build Image Scan
+    needs: [publish-image]
+    if: ${{ always() && needs.push.result == 'success' }}
+    permissions:
+      packages: write         # Attestation push
+      security-events: write  # Upload SARIF
+      id-token: write         # Keyless signing
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: false
+      enable_trivy_source: false
+      enable_trivy_image: true
+      image_ref: ${{ needs.push.outputs.image }}:sha-${{ github.sha }}
+      image_digest: ${{ needs.push.outputs.digest }}
+      trivy_severity: HIGH,CRITICAL
     secrets: inherit
