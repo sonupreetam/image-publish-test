@@ -63,11 +63,9 @@ jobs:
     name: Pre-build Source Scan
     needs: [validate]
     permissions:
-      contents: read
-      actions: read
-      packages: write
-      security-events: write
-      id-token: write
+      contents: read        # OSV/Trivy need source
+      actions: read         # OSV needs this
+      security-events: write # Upload SARIF
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: true
@@ -84,9 +82,11 @@ jobs:
     name: Build and Push Image to GHCR
     # Required permissions for the reusable workflow
     permissions:
-      contents: read
-      packages: write
-      actions: read
+      contents: read        # Checkout
+      packages: write       # Push to GHCR
+      actions: read         # GHA cache
+      id-token: write       # GitHub attestations
+      attestations: write   # Push attestations
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
     with:
       component_name: 'image-publish-test'
@@ -108,11 +108,9 @@ jobs:
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      contents: read
-      actions: read
-      packages: write
-      security-events: write
-      id-token: write
+      packages: write       # Vuln attestation push
+      security-events: write # Upload SARIF
+      id-token: write       # Keyless signing
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
@@ -131,8 +129,8 @@ jobs:
     needs: [publish-image, scan-image]
     if: ${{ always() && needs.publish-image.result == 'success' && needs.scan-image.result == 'success' }}
     permissions:
-      packages: write
-      id-token: write
+      packages: write       # Push signature
+      id-token: write       # Keyless signing
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
     with:
       image_name: ${{ needs.publish-image.outputs.image }}
