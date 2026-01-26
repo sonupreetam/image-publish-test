@@ -106,9 +106,7 @@ jobs:
     name: Post-build Image Scan
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
-    if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      contents: read          # Required by reusable workflow
       contents: read          # Required by reusable workflow
       packages: write         # Attestation push
       security-events: write  # Upload SARIF
