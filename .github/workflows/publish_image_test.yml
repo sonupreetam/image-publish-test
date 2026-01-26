@@ -81,7 +81,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════════════
   publish-image:
     needs: [scan-source]
-    name: Build and Push Image to GHCR
+    name: Build and Push to GHCR
     # Required permissions for the reusable workflow
     permissions:
       contents: read
