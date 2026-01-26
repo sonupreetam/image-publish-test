@@ -122,3 +122,22 @@ jobs:
       image_digest: ${{ needs.publish-image.outputs.digest }}
       trivy_severity: HIGH,CRITICAL
     secrets: inherit
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Step 4: SIGN AND VERIFY (after all attestations are attached)
+  # ═══════════════════════════════════════════════════════════════════════════
+  sign-and-verify:
+    name: Sign and Verify Image
+    needs: [publish-image, scan-image]
+    if: ${{ always() && needs.publish-image.result == 'success' && needs.scan-image.result == 'success' }}
+    permissions:
+      packages: write
+      id-token: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: ${{ needs.publish-image.outputs.image }}
+      digest: ${{ needs.publish-image.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      verify_attestations: true
+      verify_vuln_attestation: true
+    secrets: inherit
