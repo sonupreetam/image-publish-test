@@ -1,0 +1,8 @@
+# Trivy ignore rules for test container
+# https://trivy.dev/v0.65/docs/configuration/filtering/
+# 
+# Uncomment rules as needed:
+
+# DS001 - No USER instruction (not applicable - we have USER)
+# DS002 - No HEALTHCHECK instruction (fixed in Containerfile)
+# DS026 - No ADD instruction (not using ADD)

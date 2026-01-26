@@ -15,4 +15,7 @@ COPY --chmod=755 <<EOF /healthcheck.sh
 echo "healthy"
 EOF
 
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD /healthcheck.sh || exit 1
+
 ENTRYPOINT ["/bin/sh", "-c", "echo 'Test image running' && sleep infinity"]
