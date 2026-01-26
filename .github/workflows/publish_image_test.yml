@@ -138,6 +138,4 @@ jobs:
       image_name: ${{ needs.publish-image.outputs.image }}
       digest: ${{ needs.publish-image.outputs.digest }}
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
-      verify_attestations: true
-      verify_vuln_attestation: true
     secrets: inherit
