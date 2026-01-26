@@ -94,7 +94,6 @@ jobs:
       image_description: 'Image publish test container'
       image_vendor: 'sonu'
       force_rebuild: ${{ inputs.force_rebuild || false }}
-      platforms: 'linux/amd64'
     secrets: inherit
 
   # ═══════════════════════════════════════════════════════════════════════════
