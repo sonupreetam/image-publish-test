@@ -54,7 +54,6 @@ jobs:
             exit 1
           fi
           echo "✓ Image name format valid: $IMAGE_NAME"
-
   # ═══════════════════════════════════════════════════════════════════════════
   # Step 1: PRE-BUILD SOURCE SCANNING (shift-left security)
   # ═══════════════════════════════════════════════════════════════════════════
@@ -63,9 +62,11 @@ jobs:
     name: Pre-build Source Scan
     needs: [validate]
     permissions:
-      contents: read        # OSV/Trivy need source
-      actions: read         # OSV needs this
-      security-events: write # Upload SARIF
+      contents: read
+      actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: true
@@ -82,11 +83,11 @@ jobs:
     name: Build and Push Image to GHCR
     # Required permissions for the reusable workflow
     permissions:
-      contents: read        # Checkout
-      packages: write       # Push to GHCR
-      actions: read         # GHA cache
-      id-token: write       # GitHub attestations
-      attestations: write   # Push attestations
+      contents: read      # Checkout source code
+      packages: write     # Push to GHCR (and write cache)
+      actions: read       # Required for GHA cache access (Buildx layer caching)
+      id-token: write     # Required for GitHub attestations (OIDC token)
+      attestations: write # Required for pushing attestations to GHCR
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
     with:
       component_name: 'image-publish-test'
@@ -107,11 +108,11 @@ jobs:
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      security-events: write # Upload SARIF
       contents: read
       actions: read
-      packages: write         # Required for validation, won't be used
-      id-token: write         # Required for validation, won't be used
+      packages: write
+      security-events: write
+      id-token: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
