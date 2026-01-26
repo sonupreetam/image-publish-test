@@ -64,7 +64,10 @@ jobs:
     needs: [validate]
     permissions:
       contents: read
+      actions: read
+      packages: write
       security-events: write
+      id-token: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: true
@@ -105,9 +108,11 @@ jobs:
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      packages: write         # Attestation push
-      security-events: write  # Upload SARIF
-      id-token: write         # Keyless signing
+      contents: read
+      actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
