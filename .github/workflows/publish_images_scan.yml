@@ -1,0 +1,123 @@
+# Publish and Scan Workflow
+# =========================
+# Builds, pushes container images to GHCR, and runs vulnerability scans.
+#
+# Pipeline:
+# 1. Source vulnerability scan (OSV + Trivy source)
+# 2. Build and push image to GHCR
+# 3. Container image vulnerability scan (Trivy image)
+#
+# Prerequisites:
+# - Branch protection with required status checks
+# - GITHUB_TOKEN with packages:write permission (automatic)
+
+name: Publish and Scan
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/Containerfile*'
+      - '**/Dockerfile*'
+      - 'src/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly rebuilds for base image security updates
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild without cache'
+        type: boolean
+        required: false
+        default: false
+      skip_source_scan:
+        description: 'Skip source vulnerability scan'
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  # ------------------------------------------------------------------
+  # Stage 1: Source Vulnerability Scan
+  # Runs OSV-Scanner and Trivy source scan before building
+  # ------------------------------------------------------------------
+  source-scan:
+    name: Source Scan
+    if: ${{ github.event.inputs.skip_source_scan != 'true' }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: true
+      enable_trivy_source: true
+      enable_secret_scan: true
+      enable_trivy_image: false
+      trivy_severity: 'HIGH,CRITICAL'
+      ignore_unfixed: true
+      upload_sarif: true
+      fail_on_vuln: true
+
+  # ------------------------------------------------------------------
+  # Stage 2: Build and Push Image
+  # Only runs on main branch pushes (not PRs)
+  # ------------------------------------------------------------------
+  build-push:
+    name: Build and Push
+    needs: [source-scan]
+    if: |
+      always() &&
+      (needs.source-scan.result == 'success' || needs.source-scan.result == 'skipped') &&
+      github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    uses: complytime/org-infra/.github/workflows/reusable_publish_ghcr.yml@main
+    with:
+      component_name: my-component
+      containerfile_path: Containerfile
+      context_path: .
+      image_name: ${{ github.repository }}
+      image_description: 'My container image'
+      image_vendor: 'MyOrg'
+      platforms: 'linux/amd64'
+      force_rebuild: ${{ github.event.inputs.force_rebuild == 'true' }}
+      require_protected_ref: true
+    # secrets:
+    #   registry_token: ${{ secrets.GHCR_TOKEN }}  # Optional: uses GITHUB_TOKEN by default
+
+  # ------------------------------------------------------------------
+  # Stage 3: Image Vulnerability Scan
+  # Scans the built container image for vulnerabilities
+  # ------------------------------------------------------------------
+  image-scan:
+    name: Image Scan
+    needs: [build-push]
+    if: ${{ needs.build-push.result == 'success' }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: false
+      enable_trivy_source: false
+      enable_trivy_image: true
+      image_ref: ${{ needs.build-push.outputs.image }}@${{ needs.build-push.outputs.digest }}
+      trivy_severity: 'HIGH,CRITICAL'
+      ignore_unfixed: true
+      upload_sarif: true
+      fail_on_vuln: true
