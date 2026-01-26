@@ -64,7 +64,6 @@ jobs:
     needs: [validate]
     permissions:
       contents: read
-      actions: read
       security-events: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
@@ -107,7 +106,6 @@ jobs:
     needs: [publish-image]
     if: ${{ always() && needs.publish-image.result == 'success' }}
     permissions:
-      contents: read          # Required by reusable workflow
       packages: write         # Attestation push
       security-events: write  # Upload SARIF
       id-token: write         # Keyless signing
