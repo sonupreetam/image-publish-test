@@ -124,7 +124,7 @@ jobs:
     secrets: inherit
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # Step 4: SIGN AND VERIFY (after all attestations are attached)
+  # Step 4: SIGN AND VERIFY 
   # ═══════════════════════════════════════════════════════════════════════════
   sign-and-verify:
     name: Sign and Verify Image
