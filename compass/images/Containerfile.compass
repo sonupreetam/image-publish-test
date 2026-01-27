@@ -1,0 +1,37 @@
+# Compass Test Image
+# Simulates the ComplyBeacon Compass service for workflow testing
+FROM alpine:3.23
+
+LABEL org.opencontainers.image.title="Compass Test Image" \
+      org.opencontainers.image.description="Test image simulating Compass service" \
+      org.opencontainers.image.vendor="Test" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/sonupreetam/image-publish-test"
+
+# Install curl for health checks (simulates real service dependencies)
+RUN apk add --no-cache curl ca-certificates
+
+ARG USER_UID=10001
+RUN adduser -D -u ${USER_UID} compass
+USER compass
+
+WORKDIR /app
+
+# Simulate compass service script
+COPY --chmod=755 <<EOF /app/compass.sh
+#!/bin/sh
+echo "🧭 Compass service starting..."
+echo "Version: test-$(cat /etc/alpine-release)"
+echo "User: $(whoami)"
+while true; do
+    echo "[$(date -Iseconds)] Compass: navigation data processed"
+    sleep 60
+done
+EOF
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD echo "healthy" || exit 1
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/compass.sh"]

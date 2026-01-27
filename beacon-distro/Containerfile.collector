@@ -1,0 +1,39 @@
+# Beacon Distro Collector Test Image
+# Simulates the ComplyBeacon Beacon Distro collector for workflow testing
+FROM alpine:3.23
+
+LABEL org.opencontainers.image.title="Beacon Distro Test Image" \
+      org.opencontainers.image.description="Test image simulating Beacon Distro collector" \
+      org.opencontainers.image.vendor="Test" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/sonupreetam/image-publish-test"
+
+# Install jq for data processing (simulates collector dependencies)
+RUN apk add --no-cache jq
+
+ARG USER_UID=10002
+RUN adduser -D -u ${USER_UID} collector
+USER collector
+
+WORKDIR /collector
+
+# Simulate collector script
+COPY --chmod=755 <<EOF /collector/collect.sh
+#!/bin/sh
+echo "📡 Beacon Distro collector starting..."
+echo "Version: test-$(cat /etc/alpine-release)"
+echo "User: $(whoami)"
+echo "jq version: $(jq --version)"
+while true; do
+    echo "[$(date -Iseconds)] Collector: telemetry batch collected"
+    sleep 45
+done
+EOF
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD echo "collecting" || exit 1
+
+EXPOSE 4317
+EXPOSE 4318
+
+ENTRYPOINT ["/collector/collect.sh"]
