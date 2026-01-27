@@ -64,6 +64,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: read
       attestations: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
     with:
@@ -83,6 +84,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      actions: read
       attestations: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
     with:
