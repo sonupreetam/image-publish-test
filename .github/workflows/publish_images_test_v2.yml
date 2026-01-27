@@ -1,4 +1,4 @@
-# Multi-Component Image Pipeline (Tests)
+# Multi-Component Image Pipeline (Test)
 # validate → scan-source → build → scan-image → sign → summary
 name: Publish Images Test
 
