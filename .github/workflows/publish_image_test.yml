@@ -1,4 +1,4 @@
-# Publish Image Workflow
+# Publish Image Workflows
 # ======================
 # Builds, scans, and pushes image to GHCR.
 
