@@ -1,0 +1,192 @@
+# Multi-Component Image Pipeline (Test)
+# validate → scan-source → build → scan-image → sign → summary
+name: Publish Images Test
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '**/Containerfile*'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild without cache'
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  ORG: sonupreetam
+
+jobs:
+  # ── Stage 0: Validate ──────────────────────────────────────────────────────
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate configuration
+        run: |
+          for img in "test-compass" "test-beacon-distro"; do
+            echo "✓ Image: ${{ env.ORG }}/$img"
+          done
+
+  # ── Stage 1: Source Scan ───────────────────────────────────────────────────
+  # Permissions: reusable_vuln_scan.yml needs these for ALL modes (source + image)
+  scan-source:
+    needs: [validate]
+    permissions:
+      contents: read          # checkout source for scanning
+      packages: read          # pull images (not used here, but reusable needs it)
+      security-events: write  # upload SARIF results
+      id-token: write         # OIDC for registry auth
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: true
+      enable_trivy_source: true
+      enable_trivy_image: false
+      trivy_severity: HIGH,CRITICAL
+    secrets: inherit
+
+  # ── Stage 2: Build Images ──────────────────────────────────────────────────
+  build-compass:
+    needs: [scan-source]
+    if: ${{ needs.scan-source.result == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
+    with:
+      component_name: compass
+      containerfile_path: compass/images/Containerfile.compass
+      context_path: .
+      image_name: sonupreetam/test-compass
+      image_description: Test Compass service
+      image_vendor: Test
+      force_rebuild: ${{ inputs.force_rebuild || false }}
+    secrets: inherit
+
+  build-beacon-distro:
+    needs: [scan-source]
+    if: ${{ needs.scan-source.result == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
+    with:
+      component_name: beacon-distro
+      containerfile_path: beacon-distro/Containerfile.collector
+      context_path: ./beacon-distro
+      image_name: sonupreetam/test-beacon-distro
+      image_description: Test Beacon Distro collector
+      image_vendor: Test
+      force_rebuild: ${{ inputs.force_rebuild || false }}
+    secrets: inherit
+
+  # ── Stage 3: Image Scan ────────────────────────────────────────────────────
+  # Permissions: same as scan-source (reusable workflow needs superset)
+  scan-compass:
+    needs: [build-compass]
+    if: ${{ needs.build-compass.result == 'success' }}
+    permissions:
+      contents: read          # reusable may checkout for config
+      packages: read          # pull image from GHCR
+      security-events: write  # upload SARIF results
+      id-token: write         # OIDC for registry auth
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: false
+      enable_trivy_source: false
+      enable_trivy_image: true
+      image_ref: ${{ needs.build-compass.outputs.image }}
+      image_digest: ${{ needs.build-compass.outputs.digest }}
+      trivy_severity: HIGH,CRITICAL
+    secrets: inherit
+
+  scan-beacon-distro:
+    needs: [build-beacon-distro]
+    if: ${{ needs.build-beacon-distro.result == 'success' }}
+    permissions:
+      contents: read          # reusable may checkout for config
+      packages: read          # pull image from GHCR
+      security-events: write  # upload SARIF results
+      id-token: write         # OIDC for registry auth
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
+    with:
+      enable_osv: false
+      enable_trivy_source: false
+      enable_trivy_image: true
+      image_ref: ${{ needs.build-beacon-distro.outputs.image }}
+      image_digest: ${{ needs.build-beacon-distro.outputs.digest }}
+      trivy_severity: HIGH,CRITICAL
+    secrets: inherit
+
+  # ── Stage 4: Sign Images ───────────────────────────────────────────────────
+  sign-compass:
+    needs: [build-compass, scan-compass]
+    if: ${{ needs.build-compass.result == 'success' && needs.scan-compass.result == 'success' }}
+    permissions:
+      packages: write
+      id-token: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: ${{ needs.build-compass.outputs.image }}
+      digest: ${{ needs.build-compass.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+    secrets: inherit
+
+  sign-beacon-distro:
+    needs: [build-beacon-distro, scan-beacon-distro]
+    if: ${{ needs.build-beacon-distro.result == 'success' && needs.scan-beacon-distro.result == 'success' }}
+    permissions:
+      packages: write
+      id-token: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: ${{ needs.build-beacon-distro.outputs.image }}
+      digest: ${{ needs.build-beacon-distro.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+    secrets: inherit
+
+  # ── Stage 5: Summary ───────────────────────────────────────────────────────
+  summary:
+    needs: [scan-source, build-compass, build-beacon-distro, scan-compass, scan-beacon-distro, sign-compass, sign-beacon-distro]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Pipeline Summary
+        env:
+          R_SRC: ${{ needs.scan-source.result }}
+          R_B1: ${{ needs.build-compass.result }}
+          R_B2: ${{ needs.build-beacon-distro.result }}
+          R_S1: ${{ needs.scan-compass.result }}
+          R_S2: ${{ needs.scan-beacon-distro.result }}
+          R_G1: ${{ needs.sign-compass.result }}
+          R_G2: ${{ needs.sign-beacon-distro.result }}
+        run: |
+          icon() { [[ "$1" == "success" ]] && echo "✅" || ([[ "$1" == "skipped" ]] && echo "⏭️" || echo "❌"); }
+          
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## 🚀 Image Pipeline Summary
+          
+          | Stage | Compass | Beacon Distro |
+          |-------|---------|---------------|
+          | Source Scan | $(icon $R_SRC) | $(icon $R_SRC) |
+          | Build | $(icon $R_B1) | $(icon $R_B2) |
+          | Image Scan | $(icon $R_S1) | $(icon $R_S2) |
+          | Sign | $(icon $R_G1) | $(icon $R_G2) |
+          EOF
+          
+          [[ "$R_B1" == "success" || "$R_B2" == "success" ]] && echo "✅ Pipeline completed" || exit 1
