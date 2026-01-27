@@ -47,6 +47,7 @@ jobs:
       packages: read          # pull images (not used here, but reusable needs it)
       security-events: write  # upload SARIF results
       id-token: write         # OIDC for registry auth
+      actions: read
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: true
