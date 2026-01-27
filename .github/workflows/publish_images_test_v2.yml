@@ -102,7 +102,7 @@ jobs:
     if: ${{ needs.build-compass.result == 'success' }}
     permissions:
       contents: read          # reusable may checkout for config
-      packages: read          # pull image from GHCR
+      packages: write         # pull image from GHCR
       security-events: write  # upload SARIF results
       id-token: write         # OIDC for registry auth
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
@@ -120,7 +120,7 @@ jobs:
     if: ${{ needs.build-beacon-distro.result == 'success' }}
     permissions:
       contents: read          # reusable may checkout for config
-      packages: read          # pull image from GHCR
+      packages: write         # pull image from GHCR
       security-events: write  # upload SARIF results
       id-token: write         # OIDC for registry auth
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
