@@ -98,7 +98,7 @@ jobs:
       id-token: write
       actions: read
       attestations: write
-    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_push_ghcr.yml@main
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_publish_ghcr.yml@main
     with:
       component_name: beacon-distro
       containerfile_path: beacon-distro/Containerfile.collector
