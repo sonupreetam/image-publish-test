@@ -34,24 +34,10 @@ env:
   ORG: sonupreetam
 
 jobs:
-  # ── Stage 0: Validate ──────────────────────────────────────────────────────
-  validate:
-    name: Validate Inputs
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Validate image name formats
-        run: |
-          for img in "test-compass" "test-beacon-distro"; do
-            echo "✓ Image: ${{ env.ORG }}/$img"
-          done
-
   # ── Stage 1: Source Scan ───────────────────────────────────────────────────
   # Permissions: reusable_vuln_scan.yml needs these for ALL modes (source + image)
   scan-source:
     name: Pre-build Source Scan
-    needs: [validate]
     permissions:
       contents: read          # checkout source for scanning
       packages: write         # reusable workflow's nested job requires write
@@ -91,7 +77,6 @@ jobs:
   build-beacon-distro:
     name: Build Beacon Distro Image
     needs: [scan-source]
-    if: ${{ needs.scan-source.result == 'success' }}
     permissions:
       contents: read
       packages: write
@@ -114,7 +99,6 @@ jobs:
   scan-compass:
     name: Scan Compass Image
     needs: [build-compass]
-    if: ${{ needs.build-compass.result == 'success' }}
     permissions:
       contents: read          # reusable may checkout for config
       packages: write         # pull image from GHCR
@@ -134,7 +118,6 @@ jobs:
   scan-beacon-distro:
     name: Scan Beacon Distro Image
     needs: [build-beacon-distro]
-    if: ${{ needs.build-beacon-distro.result == 'success' }}
     permissions:
       contents: read          # reusable may checkout for config
       packages: write         # pull image from GHCR
@@ -155,7 +138,6 @@ jobs:
   sign-compass:
     name: Sign Compass Image
     needs: [build-compass, scan-compass]
-    if: ${{ needs.build-compass.result == 'success' && needs.scan-compass.result == 'success' }}
     permissions:
       packages: write
       id-token: write
@@ -169,7 +151,6 @@ jobs:
   sign-beacon-distro:
     name: Sign Beacon Distro Image
     needs: [build-beacon-distro, scan-beacon-distro]
-    if: ${{ needs.build-beacon-distro.result == 'success' && needs.scan-beacon-distro.result == 'success' }}
     permissions:
       packages: write
       id-token: write
