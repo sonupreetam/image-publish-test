@@ -153,6 +153,7 @@ jobs:
 
   # ── Stage 4: Sign Images ───────────────────────────────────────────────────
   sign-compass:
+    name: Sign Compass Image
     needs: [build-compass, scan-compass]
     if: ${{ needs.build-compass.result == 'success' && needs.scan-compass.result == 'success' }}
     permissions:
@@ -215,4 +216,14 @@ jobs:
             echo "⚠️ **One or more components failed.**" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-          echo "✅ **Pipeline completed successfully.**" >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          
+          ✅ **Pipeline completed successfully.**
+          
+          ### 🔒 Security Checks Passed
+          - Secret scanning
+          - Vulnerability scanning
+          - SBOM generated
+          - Provenance attestation
+          - Image signed and verified
+          EOF
