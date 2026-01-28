@@ -15,10 +15,16 @@ on:
         type: boolean
         default: false
 
-permissions: {}
+permissions:
+  contents: none
+  packages: none
+  id-token: none
+  attestations: none
+  security-events: none
+  actions: none
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: publish-images-ghcr-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -28,11 +34,12 @@ env:
 jobs:
   # ── Stage 0: Validate ──────────────────────────────────────────────────────
   validate:
+    name: Validate Inputs
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - name: Validate configuration
+      - name: Validate image name formats
         run: |
           for img in "test-compass" "test-beacon-distro"; do
             echo "✓ Image: ${{ env.ORG }}/$img"
@@ -41,6 +48,7 @@ jobs:
   # ── Stage 1: Source Scan ───────────────────────────────────────────────────
   # Permissions: reusable_vuln_scan.yml needs these for ALL modes (source + image)
   scan-source:
+    name: Pre-build Source Scan
     needs: [validate]
     permissions:
       contents: read          # checkout source for scanning
@@ -58,6 +66,7 @@ jobs:
 
   # ── Stage 2: Build Images ──────────────────────────────────────────────────
   build-compass:
+    name: Build Compass Image
     needs: [scan-source]
     if: ${{ needs.scan-source.result == 'success' }}
     permissions:
@@ -78,6 +87,7 @@ jobs:
     secrets: inherit
 
   build-beacon-distro:
+    name: Build Beacon Distro Image
     needs: [scan-source]
     if: ${{ needs.scan-source.result == 'success' }}
     permissions:
@@ -100,6 +110,7 @@ jobs:
   # ── Stage 3: Image Scan ────────────────────────────────────────────────────
   # Permissions: same as scan-source (reusable workflow needs superset)
   scan-compass:
+    name: Scan Compass Image
     needs: [build-compass]
     if: ${{ needs.build-compass.result == 'success' }}
     permissions:
@@ -119,6 +130,7 @@ jobs:
     secrets: inherit
 
   scan-beacon-distro:
+    name: Scan Beacon Distro Image
     needs: [build-beacon-distro]
     if: ${{ needs.build-beacon-distro.result == 'success' }}
     permissions:
@@ -152,6 +164,7 @@ jobs:
     secrets: inherit
 
   sign-beacon-distro:
+    name: Sign Beacon Distro Image
     needs: [build-beacon-distro, scan-beacon-distro]
     if: ${{ needs.build-beacon-distro.result == 'success' && needs.scan-beacon-distro.result == 'success' }}
     permissions:
@@ -166,12 +179,14 @@ jobs:
 
   # ── Stage 5: Summary ───────────────────────────────────────────────────────
   summary:
+    name: Pipeline Summary
     needs: [scan-source, build-compass, build-beacon-distro, scan-compass, scan-beacon-distro, sign-compass, sign-beacon-distro]
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     steps:
-      - name: Pipeline Summary
+      - name: Generate Summary
         env:
           R_SRC: ${{ needs.scan-source.result }}
           R_B1: ${{ needs.build-compass.result }}
@@ -181,7 +196,7 @@ jobs:
           R_G1: ${{ needs.sign-compass.result }}
           R_G2: ${{ needs.sign-beacon-distro.result }}
         run: |
-          icon() { [[ "$1" == "success" ]] && echo "✅" || ([[ "$1" == "skipped" ]] && echo "⏭️" || echo "❌"); }
+          icon() { case "$1" in success) echo "✅";; skipped) echo "⏭️";; *) echo "❌";; esac; }
           
           cat >> $GITHUB_STEP_SUMMARY << EOF
           ## 🚀 Image Pipeline Summary
@@ -193,5 +208,9 @@ jobs:
           | Image Scan | $(icon $R_S1) | $(icon $R_S2) |
           | Sign | $(icon $R_G1) | $(icon $R_G2) |
           EOF
-          
-          [[ "$R_B1" == "success" || "$R_B2" == "success" ]] && echo "✅ Pipeline completed" || exit 1
+          if [[ "$R_B1" != "success" && "$R_B1" != "skipped" ]] || \
+             [[ "$R_B2" != "success" && "$R_B2" != "skipped" ]]; then
+            echo "⚠️ **One or more components failed.**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ **Pipeline completed successfully.**" >> $GITHUB_STEP_SUMMARY
