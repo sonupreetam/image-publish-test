@@ -1,4 +1,4 @@
-# Multi-Component Image Pipeline (Test)
+# Multi-Component Image Pipeline (Tests)
 # validate → scan-source → build → scan-image → sign → summary
 name: Publish Images Test
 
@@ -113,7 +113,7 @@ jobs:
       enable_osv: false
       enable_trivy_source: false
       enable_trivy_image: true
-      image_ref: ${{ needs.build-compass.outputs.image }}
+      image_ref: ${{ needs.build-compass.outputs.image }}:sha-${{ github.sha }}
       image_digest: ${{ needs.build-compass.outputs.digest }}
       trivy_severity: HIGH,CRITICAL
     secrets: inherit
@@ -132,7 +132,7 @@ jobs:
       enable_osv: false
       enable_trivy_source: false
       enable_trivy_image: true
-      image_ref: ${{ needs.build-beacon-distro.outputs.image }}
+      image_ref: ${{ needs.build-beacon-distro.outputs.image }}:sha-${{ github.sha }}
       image_digest: ${{ needs.build-beacon-distro.outputs.digest }}
       trivy_severity: HIGH,CRITICAL
     secrets: inherit
