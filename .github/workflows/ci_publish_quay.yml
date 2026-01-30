@@ -181,7 +181,8 @@ jobs:
           COMPASS_DIGEST: ${{ needs.promote-compass.outputs.digest }}
           BEACON_DIGEST: ${{ needs.promote-beacon-distro.outputs.digest }}
         run: |
-          IDENTITY="https://github.com/sonupreetam/org-infra-tests(/.*)?";
+          # Use this repo's identity (the signer), not the builder's
+          IDENTITY="https://github.com/${{ github.repository }}(/.*)?";
           for pair in "test-compass:${COMPASS_DIGEST}" "test-beacon-distro:${BEACON_DIGEST}"; do
             IMG="quay.io/test_complytime/${pair%%:*}@${pair#*:}"
             cosign sign --yes "$IMG"
