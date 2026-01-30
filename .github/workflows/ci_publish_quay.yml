@@ -81,7 +81,7 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-compass
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      allowed_identity_regex: https://github.com/sonupreetam/image-publish-test(/.*)?
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
     secrets:
       dest_username: ${{ secrets.QUAY_USERNAME }}
@@ -99,7 +99,7 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-beacon-distro
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      allowed_identity_regex: https://github.com/sonupreetam/image-publish-test(/.*)?
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
     secrets:
       dest_username: ${{ secrets.QUAY_USERNAME }}
