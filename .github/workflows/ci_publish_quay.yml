@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       source_tag: ${{ steps.vars.outputs.source_tag }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
       dest_tag: ${{ steps.vars.outputs.dest_tag }}
     steps:
       - name: Compute tags
@@ -42,8 +43,10 @@ jobs:
         env:
           # Use inputs.version for workflow_dispatch, github.ref_name for tag push
           VERSION: ${{ inputs.version || github.ref_name }}
+          FULL_SHA: ${{ inputs.source_sha || github.sha }}
         run: |
-          echo "source_tag=sha-${{ inputs.source_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "source_tag=sha-${FULL_SHA}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=sha-${FULL_SHA:0:7}" >> "$GITHUB_OUTPUT"
           
           # Validate version format
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
@@ -75,31 +78,6 @@ jobs:
             fi
           done
           echo "Source images found"
-
-      - name: Check destination availability
-        if: ${{ inputs.force != true }}
-        env:
-          QUAY_USER: ${{ secrets.QUAY_USERNAME }}
-          QUAY_PASS: ${{ secrets.QUAY_PASSWORD }}
-          DEST_TAG: ${{ steps.vars.outputs.dest_tag }}
-          SRC_TAG: ${{ steps.vars.outputs.source_tag }}
-        run: |
-          echo "$QUAY_PASS" | crane auth login quay.io -u "$QUAY_USER" --password-stdin
-          if crane manifest "quay.io/test_complytime/test-compass:${DEST_TAG}" &>/dev/null; then
-            echo "::error::Tag ${DEST_TAG} already exists on Quay"
-            if [[ "${DEST_TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              NEXT="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
-              echo ""
-              echo "Suggested next version: ${NEXT}"
-              echo "  git tag ${NEXT} ${SRC_TAG#sha-}"
-              echo "  git push origin ${NEXT}"
-            fi
-            echo ""
-            echo "To force overwrite:"
-            echo "  gh workflow run 'Promote to Quay' -f version=${DEST_TAG} -f source_sha=${SRC_TAG#sha-} -f force=true"
-            exit 1
-          fi
-          echo "Destination tag available"
 
   # ── Tag GHCR with Semver ──────────────────────────────────────────────────────
   tag-ghcr:
@@ -150,7 +128,7 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-compass
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      additional_tags: ${{ needs.setup.outputs.source_tag }}
+      additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
       create_semver_tags: true
       verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
@@ -171,7 +149,7 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-beacon-distro
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      additional_tags: ${{ needs.setup.outputs.source_tag }}
+      additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
       create_semver_tags: true
       verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
@@ -200,7 +178,7 @@ jobs:
           COMPASS_DIGEST: ${{ needs.promote-compass.outputs.digest }}
           BEACON_DIGEST: ${{ needs.promote-beacon-distro.outputs.digest }}
         run: |
-          IDENTITY="https://github.com/sonupreetam/org-infra-tests(/.*)?";
+          IDENTITY="https://github.com/${{ github.repository }}(/.*)?";
           for pair in "test-compass:${COMPASS_DIGEST}" "test-beacon-distro:${BEACON_DIGEST}"; do
             IMG="quay.io/test_complytime/${pair%%:*}@${pair#*:}"
             cosign sign --yes "$IMG"
