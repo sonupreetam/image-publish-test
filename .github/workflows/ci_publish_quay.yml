@@ -158,32 +158,31 @@ jobs:
       dest_username: ${{ secrets.QUAY_USERNAME }}
       dest_password: ${{ secrets.QUAY_PASSWORD }}
 
-  # ── Sign on Quay ──────────────────────────────────────────────────────────────
-  sign:
-    needs: [promote-compass, promote-beacon-distro]
-    runs-on: ubuntu-latest
+  # ── Sign on Quay (proof of promotion workflow) ────────────────────────────────
+  sign-compass:
+    needs: [promote-compass]
     permissions:
+      packages: write
       id-token: write
-    steps:
-      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: quay.io/test_complytime/test-compass
+      digest: ${{ needs.promote-compass.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+    secrets:
+      quay_username: ${{ secrets.QUAY_USERNAME }}
+      quay_password: ${{ secrets.QUAY_PASSWORD }}
 
-      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
-
-      - name: Sign images
-        env:
-          COMPASS_DIGEST: ${{ needs.promote-compass.outputs.digest }}
-          BEACON_DIGEST: ${{ needs.promote-beacon-distro.outputs.digest }}
-        run: |
-          IDENTITY="https://github.com/${{ github.repository }}(/.*)?";
-          for pair in "test-compass:${COMPASS_DIGEST}" "test-beacon-distro:${BEACON_DIGEST}"; do
-            IMG="quay.io/test_complytime/${pair%%:*}@${pair#*:}"
-            cosign sign --yes "$IMG"
-            cosign verify "$IMG" \
-              --certificate-identity-regexp="$IDENTITY" \
-              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-            echo "Signed: $IMG"
-          done
+  sign-beacon-distro:
+    needs: [promote-beacon-distro]
+    permissions:
+      packages: write
+      id-token: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: quay.io/test_complytime/test-beacon-distro
+      digest: ${{ needs.promote-beacon-distro.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+    secrets:
+      quay_username: ${{ secrets.QUAY_USERNAME }}
+      quay_password: ${{ secrets.QUAY_PASSWORD }}

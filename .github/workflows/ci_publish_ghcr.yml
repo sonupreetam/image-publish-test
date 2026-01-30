@@ -9,7 +9,7 @@ on:
     branches: ['**']
     paths:
       - '**/Containerfile*'
-      - '.github/workflows/**'
+      - '.github/workflows/ci_publish_ghcr.yml' 
   workflow_dispatch:
     inputs:
       force_rebuild:
