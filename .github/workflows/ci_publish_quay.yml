@@ -1,0 +1,192 @@
+# Promote to Quay Workflow
+# =======================
+# Tag push: promotes ghcr.io/org/image:sha-<commit> → quay.io/org/image:v1.2.3
+
+name: Promote to Quay
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Commit SHA of the image to promote (7+ chars)'
+        type: string
+        required: true
+      force:
+        description: 'Overwrite existing tag (breaks immutability)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: none
+
+concurrency:
+  group: promote-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Setup & Preflight ────────────────────────────────────────────────────────
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      source_tag: ${{ steps.vars.outputs.source_tag }}
+    steps:
+      - name: Compute source tag
+        id: vars
+        run: echo "source_tag=sha-${{ inputs.source_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check source images exist
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+      - name: Verify source availability
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SRC_TAG: ${{ steps.vars.outputs.source_tag }}
+        run: |
+          echo "$TOKEN" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
+          for img in test-compass test-beacon-distro; do
+            REF="ghcr.io/sonupreetam/${img}:${SRC_TAG}"
+            if ! crane manifest "$REF" &>/dev/null; then
+              echo "::error::Image not found: $REF"
+              echo "Available tags:"
+              crane ls "ghcr.io/sonupreetam/${img}" 2>/dev/null | grep "^sha-" | tail -5 || true
+              echo ""
+              echo "Tip: git tag ${{ github.ref_name }} <commit> && git push origin ${{ github.ref_name }}"
+              exit 1
+            fi
+          done
+          echo "Source images found"
+
+      - name: Check destination availability
+        if: ${{ inputs.force != true }}
+        env:
+          QUAY_USER: ${{ secrets.QUAY_USERNAME }}
+          QUAY_PASS: ${{ secrets.QUAY_PASSWORD }}
+          DEST_TAG: ${{ github.ref_name }}
+          SRC_TAG: ${{ steps.vars.outputs.source_tag }}
+        run: |
+          echo "$QUAY_PASS" | crane auth login quay.io -u "$QUAY_USER" --password-stdin
+          if crane manifest "quay.io/test_complytime/test-compass:${DEST_TAG}" &>/dev/null; then
+            echo "::error::Tag ${DEST_TAG} already exists on Quay"
+            if [[ "${DEST_TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              NEXT="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+              echo ""
+              echo "Suggested next version: ${NEXT}"
+              echo "  git tag ${NEXT} ${SRC_TAG#sha-}"
+              echo "  git push origin ${NEXT}"
+            fi
+            echo ""
+            echo "To force overwrite:"
+            echo "  gh workflow run 'Promote to Quay' -f source_sha=${SRC_TAG#sha-} -f force=true"
+            exit 1
+          fi
+          echo "Destination tag available"
+
+  # ── Tag GHCR with Semver ──────────────────────────────────────────────────────
+  tag-ghcr:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$TOKEN" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "$TOKEN" | cosign login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Verify and tag images
+        env:
+          SOURCE_TAG: ${{ needs.setup.outputs.source_tag }}
+          DEST_TAG: ${{ github.ref_name }}
+          IDENTITY: https://github.com/sonupreetam/org-infra-tests(/.*)?
+        run: |
+          for img in test-compass test-beacon-distro; do
+            REF="ghcr.io/sonupreetam/${img}:${SOURCE_TAG}"
+            
+            # Verify signature before tagging
+            cosign verify "$REF" \
+              --certificate-identity-regexp="$IDENTITY" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            
+            # Add semver tag
+            crane tag "$REF" "$DEST_TAG"
+            echo "Tagged: ghcr.io/sonupreetam/${img}:${DEST_TAG}"
+          done
+
+  # ── Promote Images to Quay ───────────────────────────────────────────────────
+  promote-compass:
+    needs: [setup, tag-ghcr]
+    permissions:
+      packages: read
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_promote.yml@main
+    with:
+      source_registry: ghcr.io
+      source_image: sonupreetam/test-compass
+      source_tag: ${{ needs.setup.outputs.source_tag }}
+      dest_registry: quay.io
+      dest_image: test_complytime/test-compass
+      dest_tag: ${{ github.ref_name }}
+      additional_tags: ${{ needs.setup.outputs.source_tag }}
+      create_semver_tags: true
+      verify_source_signature: true
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      fail_if_dest_exists: ${{ inputs.force != true }}
+    secrets:
+      dest_username: ${{ secrets.QUAY_USERNAME }}
+      dest_password: ${{ secrets.QUAY_PASSWORD }}
+
+  promote-beacon-distro:
+    needs: [setup, tag-ghcr]
+    permissions:
+      packages: read
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_promote.yml@main
+    with:
+      source_registry: ghcr.io
+      source_image: sonupreetam/test-beacon-distro
+      source_tag: ${{ needs.setup.outputs.source_tag }}
+      dest_registry: quay.io
+      dest_image: test_complytime/test-beacon-distro
+      dest_tag: ${{ github.ref_name }}
+      additional_tags: ${{ needs.setup.outputs.source_tag }}
+      create_semver_tags: true
+      verify_source_signature: true
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      fail_if_dest_exists: ${{ inputs.force != true }}
+    secrets:
+      dest_username: ${{ secrets.QUAY_USERNAME }}
+      dest_password: ${{ secrets.QUAY_PASSWORD }}
+
+  # ── Sign on Quay ──────────────────────────────────────────────────────────────
+  sign:
+    needs: [promote-compass, promote-beacon-distro]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_PASSWORD }}
+
+      - name: Sign images
+        env:
+          COMPASS_DIGEST: ${{ needs.promote-compass.outputs.digest }}
+          BEACON_DIGEST: ${{ needs.promote-beacon-distro.outputs.digest }}
+        run: |
+          IDENTITY="https://github.com/sonupreetam/org-infra-tests(/.*)?";
+          for pair in "test-compass:${COMPASS_DIGEST}" "test-beacon-distro:${BEACON_DIGEST}"; do
+            IMG="quay.io/test_complytime/${pair%%:*}@${pair#*:}"
+            cosign sign --yes "$IMG"
+            cosign verify "$IMG" \
+              --certificate-identity-regexp="$IDENTITY" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+            echo "Signed: $IMG"
+          done
