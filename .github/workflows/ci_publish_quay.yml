@@ -9,6 +9,10 @@ on:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version tag to create (e.g., v1.2.3)'
+        type: string
+        required: true
       source_sha:
         description: 'Commit SHA of the image to promote (7+ chars)'
         type: string
@@ -22,7 +26,7 @@ permissions:
   contents: none
 
 concurrency:
-  group: promote-${{ github.ref_name }}
+  group: promote-${{ inputs.version || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -31,10 +35,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       source_tag: ${{ steps.vars.outputs.source_tag }}
+      dest_tag: ${{ steps.vars.outputs.dest_tag }}
     steps:
-      - name: Compute source tag
+      - name: Compute tags
         id: vars
-        run: echo "source_tag=sha-${{ inputs.source_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+        env:
+          # Use inputs.version for workflow_dispatch, github.ref_name for tag push
+          VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          echo "source_tag=sha-${{ inputs.source_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+          
+          # Validate version format
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "::error::Invalid version format: $VERSION"
+            echo "Expected: v1.2.3 or v1.2.3-rc1"
+            exit 1
+          fi
+          
+          echo "dest_tag=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${VERSION}"
 
       - name: Check source images exist
         uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
@@ -51,7 +70,7 @@ jobs:
               echo "Available tags:"
               crane ls "ghcr.io/sonupreetam/${img}" 2>/dev/null | grep "^sha-" | tail -5 || true
               echo ""
-              echo "Tip: git tag ${{ github.ref_name }} <commit> && git push origin ${{ github.ref_name }}"
+              echo "Tip: git tag <version> <commit> && git push origin <version>"
               exit 1
             fi
           done
@@ -62,7 +81,7 @@ jobs:
         env:
           QUAY_USER: ${{ secrets.QUAY_USERNAME }}
           QUAY_PASS: ${{ secrets.QUAY_PASSWORD }}
-          DEST_TAG: ${{ github.ref_name }}
+          DEST_TAG: ${{ steps.vars.outputs.dest_tag }}
           SRC_TAG: ${{ steps.vars.outputs.source_tag }}
         run: |
           echo "$QUAY_PASS" | crane auth login quay.io -u "$QUAY_USER" --password-stdin
@@ -77,7 +96,7 @@ jobs:
             fi
             echo ""
             echo "To force overwrite:"
-            echo "  gh workflow run 'Promote to Quay' -f source_sha=${SRC_TAG#sha-} -f force=true"
+            echo "  gh workflow run 'Promote to Quay' -f version=${DEST_TAG} -f source_sha=${SRC_TAG#sha-} -f force=true"
             exit 1
           fi
           echo "Destination tag available"
@@ -102,7 +121,7 @@ jobs:
       - name: Verify and tag images
         env:
           SOURCE_TAG: ${{ needs.setup.outputs.source_tag }}
-          DEST_TAG: ${{ github.ref_name }}
+          DEST_TAG: ${{ needs.setup.outputs.dest_tag }}
           IDENTITY: https://github.com/sonupreetam/org-infra-tests(/.*)?
         run: |
           for img in test-compass test-beacon-distro; do
@@ -130,7 +149,7 @@ jobs:
       source_tag: ${{ needs.setup.outputs.source_tag }}
       dest_registry: quay.io
       dest_image: test_complytime/test-compass
-      dest_tag: ${{ github.ref_name }}
+      dest_tag: ${{ needs.setup.outputs.dest_tag }}
       additional_tags: ${{ needs.setup.outputs.source_tag }}
       create_semver_tags: true
       verify_source_signature: true
@@ -151,7 +170,7 @@ jobs:
       source_tag: ${{ needs.setup.outputs.source_tag }}
       dest_registry: quay.io
       dest_image: test_complytime/test-beacon-distro
-      dest_tag: ${{ github.ref_name }}
+      dest_tag: ${{ needs.setup.outputs.dest_tag }}
       additional_tags: ${{ needs.setup.outputs.source_tag }}
       create_semver_tags: true
       verify_source_signature: true
@@ -181,8 +200,7 @@ jobs:
           COMPASS_DIGEST: ${{ needs.promote-compass.outputs.digest }}
           BEACON_DIGEST: ${{ needs.promote-beacon-distro.outputs.digest }}
         run: |
-          # Use this repo's identity (the signer), not the builder's
-          IDENTITY="https://github.com/${{ github.repository }}(/.*)?";
+          IDENTITY="https://github.com/sonupreetam/org-infra-tests(/.*)?";
           for pair in "test-compass:${COMPASS_DIGEST}" "test-beacon-distro:${BEACON_DIGEST}"; do
             IMG="quay.io/test_complytime/${pair%%:*}@${pair#*:}"
             cosign sign --yes "$IMG"
