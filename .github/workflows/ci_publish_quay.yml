@@ -30,56 +30,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ── Setup & Preflight ────────────────────────────────────────────────────────
   setup:
     runs-on: ubuntu-latest
     outputs:
       source_tag: ${{ steps.vars.outputs.source_tag }}
-      short_sha: ${{ steps.vars.outputs.short_sha }}
       dest_tag: ${{ steps.vars.outputs.dest_tag }}
     steps:
       - name: Compute tags
         id: vars
         env:
-          # Use inputs.version for workflow_dispatch, github.ref_name for tag push
           VERSION: ${{ inputs.version || github.ref_name }}
           FULL_SHA: ${{ inputs.source_sha || github.sha }}
         run: |
           echo "source_tag=sha-${FULL_SHA}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=sha-${FULL_SHA:0:7}" >> "$GITHUB_OUTPUT"
           
-          # Validate version format
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
-            echo "::error::Invalid version format: $VERSION"
-            echo "Expected: v1.2.3 or v1.2.3-rc1"
+            echo "::error::Invalid version format: $VERSION (expected: v1.2.3)"
             exit 1
           fi
           
           echo "dest_tag=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Release version: ${VERSION}"
 
-      - name: Check source images exist
-        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
-      - name: Verify source availability
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SRC_TAG: ${{ steps.vars.outputs.source_tag }}
-        run: |
-          echo "$TOKEN" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
-          for img in test-compass test-beacon-distro; do
-            REF="ghcr.io/sonupreetam/${img}:${SRC_TAG}"
-            if ! crane manifest "$REF" &>/dev/null; then
-              echo "::error::Image not found: $REF"
-              echo "Available tags:"
-              crane ls "ghcr.io/sonupreetam/${img}" 2>/dev/null | grep "^sha-" | tail -5 || true
-              echo ""
-              echo "Tip: git tag <version> <commit> && git push origin <version>"
-              exit 1
-            fi
-          done
-          echo "Source images found"
-
-  # ── Tag GHCR with Semver ──────────────────────────────────────────────────────
   tag-ghcr:
     needs: setup
     runs-on: ubuntu-latest
@@ -87,35 +58,17 @@ jobs:
       packages: write
     steps:
       - uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
-      - uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
-
-      - name: Log in to GHCR
+      - name: Tag GHCR images
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$TOKEN" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
-          echo "$TOKEN" | cosign login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Verify and tag images
-        env:
           SOURCE_TAG: ${{ needs.setup.outputs.source_tag }}
           DEST_TAG: ${{ needs.setup.outputs.dest_tag }}
-          IDENTITY: https://github.com/sonupreetam/org-infra-tests(/.*)?
         run: |
+          echo "$TOKEN" | crane auth login ghcr.io -u ${{ github.actor }} --password-stdin
           for img in test-compass test-beacon-distro; do
-            REF="ghcr.io/sonupreetam/${img}:${SOURCE_TAG}"
-            
-            # Verify signature before tagging
-            cosign verify "$REF" \
-              --certificate-identity-regexp="$IDENTITY" \
-              --certificate-oidc-issuer=https://token.actions.githubusercontent.com
-            
-            # Add semver tag
-            crane tag "$REF" "$DEST_TAG"
-            echo "Tagged: ghcr.io/sonupreetam/${img}:${DEST_TAG}"
+            crane tag "ghcr.io/sonupreetam/${img}:${SOURCE_TAG}" "$DEST_TAG"
           done
 
-  # ── Promote Images to Quay ───────────────────────────────────────────────────
   promote-compass:
     needs: [setup, tag-ghcr]
     permissions:
@@ -128,9 +81,6 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-compass
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
-      create_semver_tags: false
-      verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
     secrets:
@@ -149,40 +99,8 @@ jobs:
       dest_registry: quay.io
       dest_image: test_complytime/test-beacon-distro
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
-      additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
-      create_semver_tags: false
-      verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
     secrets:
       dest_username: ${{ secrets.QUAY_USERNAME }}
       dest_password: ${{ secrets.QUAY_PASSWORD }}
-
-  # ── Sign on Quay (proof of promotion workflow) ────────────────────────────────
-  sign-compass:
-    needs: [promote-compass]
-    permissions:
-      packages: write
-      id-token: write
-    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
-    with:
-      image_name: quay.io/test_complytime/test-compass
-      digest: ${{ needs.promote-compass.outputs.digest }}
-      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
-    secrets:
-      quay_username: ${{ secrets.QUAY_USERNAME }}
-      quay_password: ${{ secrets.QUAY_PASSWORD }}
-
-  sign-beacon-distro:
-    needs: [promote-beacon-distro]
-    permissions:
-      packages: write
-      id-token: write
-    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
-    with:
-      image_name: quay.io/test_complytime/test-beacon-distro
-      digest: ${{ needs.promote-beacon-distro.outputs.digest }}
-      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
-    secrets:
-      quay_username: ${{ secrets.QUAY_USERNAME }}
-      quay_password: ${{ secrets.QUAY_PASSWORD }}
