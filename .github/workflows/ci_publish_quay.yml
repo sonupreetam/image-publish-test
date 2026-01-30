@@ -129,7 +129,7 @@ jobs:
       dest_image: test_complytime/test-compass
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
       additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
-      create_semver_tags: true
+      create_semver_tags: false
       verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
@@ -150,7 +150,7 @@ jobs:
       dest_image: test_complytime/test-beacon-distro
       dest_tag: ${{ needs.setup.outputs.dest_tag }}
       additional_tags: ${{ needs.setup.outputs.source_tag }},${{ needs.setup.outputs.short_sha }}
-      create_semver_tags: true
+      create_semver_tags: false
       verify_source_signature: true
       allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
       fail_if_dest_exists: ${{ inputs.force != true }}
