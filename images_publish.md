@@ -106,7 +106,7 @@ cosign verify quay.io/continuouscompliance/complytime-compass \
 ## More Information
 - [Sigstore Documentation](https://docs.sigstore.dev/) — Keyless signing details
 
-External Caller Workflow
+ Caller Workflow
     │
     ├─1─▶ reusable_publish_ghcr.yml
     │         • Build image
@@ -124,3 +124,17 @@ External Caller Workflow
               • Verify SBOM
               • Verify vuln attestation
               • Sign image
+
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: Supply Chain         [SHA-pinned actions]        │ ✅
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: Access Control       [Job permissions, OIDC]     │ ✅
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: Input Validation     [Digest regex, guards]      │ ⚠️
+├─────────────────────────────────────────────────────────────┤
+│  Layer 4: Branch Protection    [ref_protected gate]        │ ✅
+├─────────────────────────────────────────────────────────────┤
+│  Layer 5: Cryptographic Proof  [Cosign attestation]        │ ✅
+├─────────────────────────────────────────────────────────────┤
+│  Layer 6: Audit Trail          [SARIF, Rekor, outputs]     │ ✅
+└─────────────────────────────────────────────────────────────┘

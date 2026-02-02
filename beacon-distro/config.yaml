@@ -1,0 +1,61 @@
+# To limit exposure to denial-of-service attacks, change the host in endpoints below from 0.0.0.0 to a specific network interface.
+# See https://github.com/open-telemetry/opentelemetry-collector/blob/main/docs/security-best-practices.md#safeguards-against-denial-of-service-attacks
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+  truthbeam:
+    endpoint: "https://0.0.0.0:8081"
+    # Disable compression for small enrichment API requests
+    # Compression overhead is unnecessary for ~200 byte payloads
+    compression: ""
+  # For logs that are received from or something similar filelog instead of OTLP.
+  # These are expected to be in OCSF format before entering the pipeline.
+  transform/ocsf:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        conditions:
+          - body != nil and Substring(body, 0, 2) == "{\""
+        statements:
+          - set(observed_time, Now()) where observed_time_unix_nano == 0
+          - set(time, observed_time) where time_unix_nano == 0
+          # Extract policy.rule.id from OCSF policy.uid field
+          - set(attributes["policy.rule.id"], ParseJSON(body)["policy"]["uid"]) where ParseJSON(body)["policy"]["uid"] != nil
+          # Extract policy.engine.name from OCSF metadata.product.name field
+          - set(attributes["policy.engine.name"], ParseJSON(body)["metadata"]["product"]["name"]) where ParseJSON(body)["metadata"]["product"]["name"] != nil
+          # Extract policy.evaluation.result from OCSF status field (mapped to Compass enum values)
+          - set(attributes["policy.evaluation.result"], "Passed") where ParseJSON(body)["status"] == "success"
+          - set(attributes["policy.evaluation.result"], "Failed") where ParseJSON(body)["status"] == "failure"
+          - set(attributes["policy.evaluation.result"], "Not Run") where ParseJSON(body)["status"] == "not_run"
+          - set(attributes["policy.evaluation.result"], "Needs Review") where ParseJSON(body)["status"] == "needs_review"
+          - set(attributes["policy.evaluation.result"], "Not Applicable") where ParseJSON(body)["status"] == "not_applicable"
+          - set(attributes["policy.evaluation.result"], "Unknown") where ParseJSON(body)["status"] == "unknown" or ParseJSON(body)["status"] == "error" or ParseJSON(body)["status"] == "timeout"
+          # Set default Unknown if status is not recognized
+          - set(attributes["policy.evaluation.result"], "Unknown") where ParseJSON(body)["status"] != nil and attributes["policy.evaluation.result"] == nil
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [ otlp ]
+      processors: [ batch ]
+      exporters: [ debug ]
+    logs:
+      receivers: [ otlp ]
+      processors: [ batch, transform/ocsf, truthbeam ]
+      exporters: [ debug ]

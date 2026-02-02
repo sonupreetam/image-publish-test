@@ -1,0 +1,47 @@
+groups:
+  - id: entity.beacon.evidence
+    name: beacon.evidence
+    type: entity
+    stability: development
+    brief: This entity represents attributes for a complete evidence log from policy engines and compliance assessment tools
+    attributes:
+      # Policy Engine Identity
+      - ref: policy.engine.name
+      - ref: policy.engine.version
+      - ref: policy.rule.id
+      - ref: policy.rule.name
+      - ref: policy.rule.uri
+      
+      # Policy Evaluation
+      - ref: policy.evaluation.result
+      - ref: policy.evaluation.message
+      
+      # Policy Target
+      - ref: policy.target.id
+      - ref: policy.target.name
+      - ref: policy.target.type
+      - ref: policy.target.environment
+      
+      # Compliance Control
+      - ref: compliance.control.id
+      - ref: compliance.control.category
+      - ref: compliance.control.catalog.id
+      - ref: compliance.control.applicability
+      
+      # Compliance Frameworks
+      - ref: compliance.frameworks
+      - ref: compliance.requirements
+      
+      # Compliance Verdict
+      - ref: compliance.status
+      - ref: compliance.risk.level
+
+      # Compliance Remediation/Enforcement
+      - ref: compliance.remediation.action
+      - ref: compliance.remediation.status
+      - ref: compliance.remediation.description
+      - ref: compliance.remediation.exception.id
+      - ref: compliance.remediation.exception.active
+
+      - ref: compliance.assessment.id
+

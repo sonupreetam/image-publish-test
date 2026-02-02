@@ -1,37 +1,53 @@
-# Compass Test Image
-# Simulates the ComplyBeacon Compass service for workflow testing
-FROM alpine:3.23
+# Multi-stage build for ComplyBeacon Compass Service
+# Stage 1: Extract CA certificates from Alpine
+# Stage 2: Build the Compass binary using Go
+# Stage 3: Create minimal runtime image with distroless base
 
-LABEL org.opencontainers.image.title="Compass Test Image" \
-      org.opencontainers.image.description="Test image simulating Compass service" \
-      org.opencontainers.image.vendor="Test" \
-      org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/sonupreetam/image-publish-test"
+# Stage 1: Certificate extraction
+FROM alpine:3.22 AS certs
+RUN apk --update add ca-certificates
 
-# Install curl for health checks (simulates real service dependencies)
-RUN apk add --no-cache curl ca-certificates
+# Stage 2: Build the Compass service
+FROM golang:1.24.5 AS build-stage
+WORKDIR /build
 
+# Copy dependency files first for better layer caching
+# When dependencies don't change, this layer is reused
+COPY compass/go.mod compass/go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build go mod download
+
+# Copy the entire compass source code
+# The build context is set to the repository root in compose.yaml
+COPY compass/. .
+
+# Build the Compass binary with build cache optimization
+# CGO is disabled for static binary compilation
+RUN --mount=type=cache,target=/root/.cache/go-build GO111MODULE=on go build ./cmd/compass
+
+# Stage 3: Runtime image
+FROM gcr.io/distroless/base:latest
+
+# Metadata labels following OCI Image Format Specification
+# Consolidated into single LABEL instruction to minimize layers
+LABEL org.opencontainers.image.title="ComplyBeacon Compass" \
+      org.opencontainers.image.description="Central enrichment service for compliance risk and framework data" \
+      org.opencontainers.image.vendor="ComplyTime" \
+      org.opencontainers.image.source="https://github.com/complytime/complybeacon" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+# Run as non-root user for security
+# USER_UID can be overridden at build time if needed
 ARG USER_UID=10001
-RUN adduser -D -u ${USER_UID} compass
-USER compass
+USER ${USER_UID}
 
-WORKDIR /app
+# Copy artifacts in order of change frequency (least to most)
+# CA certificates - rarely change
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Compass binary - changes with code updates
+COPY --chmod=755 --from=build-stage /build/compass /compass
 
-# Simulate compass service script
-COPY --chmod=755 <<EOF /app/compass.sh
-#!/bin/sh
-echo "🧭 Compass service starting..."
-echo "Version: test-$(cat /etc/alpine-release)"
-echo "User: $(whoami)"
-while true; do
-    echo "[$(date -Iseconds)] Compass: navigation data processed"
-    sleep 60
-done
-EOF
+ENTRYPOINT ["/compass"]
+CMD ["--port", "8081"]
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD echo "healthy" || exit 1
-
-EXPOSE 8080
-
-ENTRYPOINT ["/app/compass.sh"]
+# Expose Compass enrichment API port
+EXPOSE 8081

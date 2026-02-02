@@ -1,75 +1,99 @@
-# Image Publish Test Repository
+# ComplyBeacon
 
-Minimal repository for testing secure image publishing workflows.
+**ComplyBeacon** is an open-source observability toolkit designed to collect, normalize, and enrich compliance evidence, extending the OpenTelemetry (OTEL) standard.
 
-## Purpose
+By bridging the gap between raw policy scanner output and modern logging pipelines, it provides a unified, enriched, and auditable data stream for security and compliance analysis.
 
-This repo tests the following reusable workflows from `sonupreetam/org-infra-tests`:
+---
 
-- `reusable_publish_image.yml` - Build, sign, and push images to GHCR
-- `reusable_promote.yml` - Copy images from GHCR to Quay.io
-- `reusable_sign_and_verify.yml` - Sign images on Quay with Sigstore
+⚠️ **WARNING:** All components are under initial development and are **not** ready for production use.
 
-## Workflow Flow
+---
 
-```
-Push to main ──► Build & Sign ──► GHCR (ghcr.io/sonupreetam/test-compass:sha-xxx)
-                     │
-Create tag ─────────►│
-test-v0.0.1          │
-                     ▼
-              Promote to Quay ──► quay.io/test_complytime/test-compass:test-v0.0.1
-                     │
-                     ▼
-              Sign on Quay (Sigstore keyless)
-```
+## The ComplyBeacon Architecture
 
-## Testing
+ComplyBeacon is a policy-driven observability toolkit composed of four main components that work together to process and enrich compliance data.
 
-### 1. Test Build & Publish (Push to main)
+### 1. ProofWatch
 
-```bash
-git add .
-git commit -m "test: trigger publish workflow"
-git push origin main
-```
+An instrumentation library that accepts and emits pre-normalized compliance evidence as an OpenTelemetry log stream, while also instrumenting metrics for real-time observability.
 
-This triggers `publish-images.yml` which:
-- Builds the image from `Containerfile`
-- Signs with Sigstore (keyless)
-- Pushes to `ghcr.io/sonupreetam/test-compass:sha-<commit>`
+### 2. Beacon
 
-### 2. Test Promote to Quay (Create tag)
+A custom OpenTelemetry Collector distribution that acts as the pipeline's host, receiving log records from ProofWatch and preparing them for the next stage of enrichment.
 
-```bash
-git tag test-v0.0.1
-git push origin test-v0.0.1
-```
+### 3. TruthBeam
 
-This triggers `promote-to-quay.yml` which:
-- Copies from GHCR to Quay
-- Creates semver tags (test-v0.0.1, test-v0.0, test-v0)
-- Signs on Quay with Sigstore
+A custom OpenTelemetry Collector processor that enriches log records with compliance and risk data by integrating with the Compass service.
 
-## Required Secrets
+### 4. Compass
 
-Add these in Settings → Secrets → Actions:
+A central enrichment service that provides risk, threat, and compliance framework attributes based on policy lookup data.
 
-| Secret | Description |
-|--------|-------------|
-| `QUAY_USERNAME` | Quay.io robot account username |
-| `QUAY_PASSWORD` | Quay.io robot account password |
+#### Supported Compass Mappers
 
-## Verify Signatures
+| Mapper  | Description                                        |
+|---------|----------------------------------------------------|
+| `basic` | Maps to the `gemara` model based on log attributes |
 
-```bash
-# Verify GHCR image
-cosign verify ghcr.io/sonupreetam/test-compass:sha-<commit> \
-  --certificate-identity-regexp='https://github.com/sonupreetam/org-infra-tests/.*' \
-  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
+## Quick Start
 
-# Verify Quay image
-cosign verify quay.io/test_complytime/test-compass:test-v0.0.1 \
-  --certificate-identity-regexp='https://github.com/sonupreetam/org-infra-tests/.*' \
-  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
-```
+Before Deploying: Please read the following **NOTE**.
+
+⚠️ **NOTE:**
+To enable evidence log synchronization to AWS S3 and Hyperproof, you must configure the following environment variables. The collector will fail to start if the S3 configuration is invalid.
+
+For more detailed information, please refer to the integration guide: [Sync_Evidence2Hyperproof](docs/integration/Sync_Evidence2Hyperproof.md).
+
+| Environment Variable   | Description                                            |
+|------------------------|---------------------------------------------------------|
+| `AWS_REGION`           | The AWS region where your S3 bucket is hosted           |
+| `S3_BUCKETNAME`        | The name of the target S3 bucket.                       |
+| `S3_OBJ_DIR`           | The folder path (prefix) for bucket subjects            |
+| `AWS_ACCESS_KEY_ID`    | The AWS Access Key ID with permissions to the bucket    |
+| `AWS_SECRET_ACCESS_KEY`| The AWS Secret Access Key corresponding to the ID.      |
+
+
+If you do not wish to use the AWS S3 integration, you can disable it by modifying the configuration files:
+
+A. **In [hack/demo/demo-config.yaml](hack/demo/demo-config.yaml)** change the exporters line from:
+
+`exporters: [ debug, otlphttp/logs, awss3/logs ]`
+
+to
+
+`exporters: [ debug, otlphttp/logs ]`
+
+The `awss3/logs` configuration in `exporters` section should also be commented.
+
+B. **Comment collector.environment part of [compose.yml](compose.yaml)** as the AWS S3 environment variables will no longer be needed.
+
+Once you've reviewed the **NOTE** above, follow these steps to deploy the infrastructure and test the pipeline.
+
+1. **Deploy the Stack:**
+    This command builds and starts the full infrastructure, including Grafana, Loki, the custom collector (`Beacon`), and the `Compass` service.
+    ```bash
+    podman-compose up --build
+    ```
+
+2. **Test the Pipeline:**
+    Send sample compliance data to the webhook receiver to test the pipeline's functionality.
+    ```bash
+    curl -X POST http://localhost:8088/eventsource/receiver -H "Content-Type: application/json" -d @hack/sampledata/evidence.json
+    ```
+
+## Project Design
+
+For additional details on the planned design and roadmap, see [`DESIGN.md`](./docs/DESIGN.md).
+
+## Updating the Semantic Conventions
+
+Update semantic convention under `model/`
+
+Validate with `make weaver-check`
+
+Update docs and code:
+`make weaver-docsgen`
+`make weaver-codegen`
+
+---

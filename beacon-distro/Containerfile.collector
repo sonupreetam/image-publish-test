@@ -1,39 +1,52 @@
-# Beacon Distro Collector Test Image
-# Simulates the ComplyBeacon Beacon Distro collector for workflow testing
-FROM alpine:3.23
+# Multi-stage build for ComplyBeacon OpenTelemetry Collector
+# Stage 1: Extract CA certificates from Alpine
+# Stage 2: Build the collector binary using the builder tool
+# Stage 3: Create minimal runtime image with distroless base
 
-LABEL org.opencontainers.image.title="Beacon Distro Test Image" \
-      org.opencontainers.image.description="Test image simulating Beacon Distro collector" \
-      org.opencontainers.image.vendor="Test" \
-      org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.source="https://github.com/sonupreetam/image-publish-test"
+# Stage 1: Certificate extraction
+FROM alpine:3.22 AS certs
+RUN apk --update add ca-certificates
 
-# Install jq for data processing (simulates collector dependencies)
-RUN apk add --no-cache jq
+# Stage 2: Build the OpenTelemetry Collector
+FROM golang:1.24.10 AS build-stage
+WORKDIR /build
 
-ARG USER_UID=10002
-RUN adduser -D -u ${USER_UID} collector
-USER collector
+# Build the collector using the OpenTelemetry collector builder
+# The builder version (v0.144.0) should align with dependencies in manifest.yaml
+# Split into two RUN commands for better layer caching
+RUN --mount=type=cache,target=/root/.cache/go-build GO111MODULE=on go install go.opentelemetry.io/collector/cmd/builder@v0.144.0
 
-WORKDIR /collector
+# Copy the manifest that defines the collector components
+COPY ./manifest.yaml manifest.yaml
+RUN --mount=type=cache,target=/root/.cache/go-build builder --config manifest.yaml
 
-# Simulate collector script
-COPY --chmod=755 <<EOF /collector/collect.sh
-#!/bin/sh
-echo "📡 Beacon Distro collector starting..."
-echo "Version: test-$(cat /etc/alpine-release)"
-echo "User: $(whoami)"
-echo "jq version: $(jq --version)"
-while true; do
-    echo "[$(date -Iseconds)] Collector: telemetry batch collected"
-    sleep 45
-done
-EOF
+# Stage 3: Runtime image
+FROM gcr.io/distroless/base:latest
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD echo "collecting" || exit 1
+# Metadata labels following OCI Image Format Specification
+# Consolidated into single LABEL instruction to minimize layers
+LABEL org.opencontainers.image.title="ComplyBeacon Collector" \
+      org.opencontainers.image.description="OpenTelemetry collector distribution for compliance evidence collection" \
+      org.opencontainers.image.vendor="ComplyTime" \
+      org.opencontainers.image.source="https://github.com/complytime/complybeacon" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
-EXPOSE 4317
-EXPOSE 4318
+# Run as non-root user for security
+# USER_UID can be overridden at build time if needed
+ARG USER_UID=10001
+USER ${USER_UID}
 
-ENTRYPOINT ["/collector/collect.sh"]
+# Copy artifacts and dependencies in order of change frequency (least to most)
+# CA certificates - rarely change
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Collector binary - changes with code updates
+COPY --chmod=755 --from=build-stage /build/beacon/otelcol-beacon /otelcol-beacon
+# Configuration - most frequently modified
+COPY config.yaml /etc/otelcol-beacon/config.yaml
+
+ENTRYPOINT ["/otelcol-beacon"]
+CMD ["--config", "/etc/otelcol-beacon/config.yaml"]
+
+# Expose standard OpenTelemetry ports and custom endpoints
+# Consolidated into single EXPOSE instruction to minimize layers
+EXPOSE 4317 4318 12001

@@ -1,0 +1,79 @@
+version: "3"
+services:
+  loki:
+    image: "docker.io/grafana/loki:3.5.1"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./hack/demo/loki-config.yaml:/etc/loki/local-config.yaml:Z
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      - GF_FEATURE_TOGGLES_ENABLE=grafanaManagedRecordingRules
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_BASIC_ENABLED=false
+    ports:
+      - "3000:3000/tcp"
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+        apiVersion: 1
+        datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          orgId: 1
+          url: 'http://loki:3100'
+          basicAuth: false
+          isDefault: true
+          version: 1
+          editable: true
+        EOF
+        /run.sh
+
+  compass:
+    build:
+      context: .
+      dockerfile: ./compass/images/Containerfile.compass
+    restart: unless-stopped
+    volumes:
+      - ./hack/sampledata:/sampledata:Z
+      - ./hack/demo/config.yaml:/config.yaml:Z
+      # Development/Testing purpose
+      - ./hack/self-signed-cert/compass.crt:/certs/compass.crt:Z
+      - ./hack/self-signed-cert/compass.key:/certs/compass.key:Z
+    command: ["--config", "/config.yaml", "--catalog", "/sampledata/osps.yaml", "--port", "8081"]
+    ports:
+      - "8081:8081"
+
+  collector:
+    environment:
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - S3_BUCKETNAME=${S3_BUCKETNAME}
+      - S3_OBJ_DIR=${S3_OBJ_DIR}
+    build:
+      context: ./beacon-distro
+      dockerfile: Containerfile.collector
+    restart: unless-stopped
+    command: ["--config=/etc/otel-collector.yaml"]
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./hack/demo/demo-config.yaml:/etc/otel-collector.yaml:Z
+      - ./data:/data:Z
+      # Development/Testing purpose
+      - ./hack/self-signed-cert/truthbeam.crt:/certs/truthbeam.crt:Z
+    ports:
+      - "4317:4317"
+      - "8088:8088"
+    depends_on:
+      - compass

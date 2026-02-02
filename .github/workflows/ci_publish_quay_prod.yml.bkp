@@ -1,0 +1,236 @@
+# Production Release to Quay
+# ==========================
+# Promotes signed images from GHCR to Quay with approval gate.
+# Trigger: git tag v1.2.3 && git push origin v1.2.3
+
+name: Release to Quay (Production)
+
+on:
+  push:
+    tags: ['v*.*.*']  
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.2.3)'
+        type: string
+        required: true
+      source_sha:
+        description: 'Source commit SHA (must have built images)'
+        type: string
+        required: true
+      force:
+        description: 'DANGER: Overwrite existing release tag'
+        type: boolean
+        default: false
+
+# Minimal permissions at workflow level
+permissions:
+  contents: read
+
+concurrency:
+  group: release-quay-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # Source registry (GHCR)
+  SOURCE_REGISTRY: ghcr.io
+  SOURCE_ORG: sonupreetam
+  # Destination registry (Quay)
+  DEST_REGISTRY: quay.io
+  DEST_ORG: test_complytime
+  # Security: Identity of workflows that signed the source images
+  SIGNER_IDENTITY: https://github.com/sonupreetam/org-infra-tests(/.*)?
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Stage 1: Validate inputs and compute tags
+  # ─────────────────────────────────────────────────────────────────────────────
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      source_tag: ${{ steps.tags.outputs.source_tag }}
+      version: ${{ steps.tags.outputs.version }}
+    steps:
+      - name: Validate and compute tags
+        id: tags
+        env:
+          VERSION: ${{ inputs.version || github.ref_name }}
+          COMMIT_SHA: ${{ inputs.source_sha || github.sha }}
+        run: |
+          # Strict semver validation
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version: $VERSION"
+            echo "Expected: v1.2.3 or v1.2.3-rc1"
+            exit 1
+          fi
+          
+          # SHA validation (full 40 chars preferred, min 7)
+          if [[ ! "$COMMIT_SHA" =~ ^[a-f0-9]{7,40}$ ]]; then
+            echo "::error::Invalid commit SHA: $COMMIT_SHA"
+            exit 1
+          fi
+          
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "source_tag=sha-${COMMIT_SHA}" >> "$GITHUB_OUTPUT"
+          
+          echo "### Release Details" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`${VERSION}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Source | \`sha-${COMMIT_SHA:0:7}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Stage 2: Verify source images exist and are signed
+  # ─────────────────────────────────────────────────────────────────────────────
+  verify-source:
+    name: Verify Source Images
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+      - uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Authenticate to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$TOKEN" | crane auth login ${{ env.SOURCE_REGISTRY }} -u ${{ github.actor }} --password-stdin
+          echo "$TOKEN" | cosign login ${{ env.SOURCE_REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Verify images exist and are signed
+        env:
+          SOURCE_TAG: ${{ needs.validate.outputs.source_tag }}
+        run: |
+          IMAGES=("test-compass" "test-beacon-distro")
+          
+          for img in "${IMAGES[@]}"; do
+            REF="${{ env.SOURCE_REGISTRY }}/${{ env.SOURCE_ORG }}/${img}:${SOURCE_TAG}"
+            
+            echo "Checking: ${REF}"
+            
+            # Verify image exists
+            if ! crane manifest "$REF" &>/dev/null; then
+              echo "::error::Image not found: ${REF}"
+              echo ""
+              echo "Available SHA tags:"
+              crane ls "${{ env.SOURCE_REGISTRY }}/${{ env.SOURCE_ORG }}/${img}" 2>/dev/null | grep "^sha-" | tail -5 || true
+              exit 1
+            fi
+            
+            # Verify signature
+            echo "Verifying signature..."
+            cosign verify "$REF" \
+              --certificate-identity-regexp="${{ env.SIGNER_IDENTITY }}" \
+              --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+              --output=text
+            
+            echo "✅ ${img}: exists and signed"
+            echo ""
+          done
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Stage 3: Tag images in GHCR with version
+  # ─────────────────────────────────────────────────────────────────────────────
+  tag-ghcr:
+    name: Tag GHCR Images
+    needs: [validate, verify-source]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+
+      - name: Tag images with version
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_TAG: ${{ needs.validate.outputs.source_tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          echo "$TOKEN" | crane auth login ${{ env.SOURCE_REGISTRY }} -u ${{ github.actor }} --password-stdin
+          
+          for img in test-compass test-beacon-distro; do
+            REF="${{ env.SOURCE_REGISTRY }}/${{ env.SOURCE_ORG }}/${img}:${SOURCE_TAG}"
+            echo "Tagging ${REF} → ${VERSION}"
+            crane tag "$REF" "$VERSION"
+          done
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Stage 4: Promote to Quay (with approval gate)
+  # ─────────────────────────────────────────────────────────────────────────────
+  promote-compass:
+    name: Promote Compass
+    needs: [validate, tag-ghcr]
+    environment: production  # Requires approval in GitHub Settings
+    permissions:
+      packages: read
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_promote.yml@4b14251
+    with:
+      source_registry: ghcr.io
+      source_image: sonupreetam/test-compass
+      source_tag: ${{ needs.validate.outputs.source_tag }}
+      dest_registry: quay.io
+      dest_image: test_complytime/test-compass
+      dest_tag: ${{ needs.validate.outputs.version }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      fail_if_dest_exists: ${{ inputs.force != true }}
+    secrets:
+      dest_username: ${{ secrets.QUAY_USERNAME }}
+      dest_password: ${{ secrets.QUAY_PASSWORD }}
+
+  promote-beacon-distro:
+    name: Promote Beacon Distro
+    needs: [validate, tag-ghcr]
+    environment: production  # Requires approval in GitHub Settings
+    permissions:
+      packages: read
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_promote.yml@4b14251
+    with:
+      source_registry: ghcr.io
+      source_image: sonupreetam/test-beacon-distro
+      source_tag: ${{ needs.validate.outputs.source_tag }}
+      dest_registry: quay.io
+      dest_image: test_complytime/test-beacon-distro
+      dest_tag: ${{ needs.validate.outputs.version }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      fail_if_dest_exists: ${{ inputs.force != true }}
+    secrets:
+      dest_username: ${{ secrets.QUAY_USERNAME }}
+      dest_password: ${{ secrets.QUAY_PASSWORD }}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Stage 5: Release Summary
+  # ─────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Release Summary
+    needs: [validate, promote-compass, promote-beacon-distro]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          COMPASS: ${{ needs.promote-compass.result }}
+          BEACON: ${{ needs.promote-beacon-distro.result }}
+        run: |
+          icon() { [[ "$1" == "success" ]] && echo "✅" || echo "❌"; }
+          
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## 🚀 Release Summary: ${VERSION}
+          
+          | Image | Status |
+          |-------|--------|
+          | test-compass | $(icon "$COMPASS") |
+          | test-beacon-distro | $(icon "$BEACON") |
+          
+          ### Published Images
+          - \`quay.io/${{ env.DEST_ORG }}/test-compass:${VERSION}\`
+          - \`quay.io/${{ env.DEST_ORG }}/test-beacon-distro:${VERSION}\`
+          
+          ### Verify Signatures
+          \`\`\`bash
+          cosign verify quay.io/${{ env.DEST_ORG }}/test-compass:${VERSION} \\
+            --certificate-identity-regexp='${{ env.SIGNER_IDENTITY }}' \\
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+          \`\`\`
+          EOF
