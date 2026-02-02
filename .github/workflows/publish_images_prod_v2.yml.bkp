@@ -40,7 +40,7 @@ permissions:
 # Prevent concurrent runs for the same ref (branch/tag)
 # Production: don't cancel in-progress runs to avoid partial deployments
 concurrency:
-  group: publish-images-ghcr-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -77,11 +77,11 @@ jobs:
     name: Pre-build Source Scan
     needs: [validate]
     permissions:
-      contents: read          # checkout source for scanning
-      packages: write         # reusable workflow's nested job requires write
-      security-events: write  # upload SARIF results
-      id-token: write         # OIDC for registry auth
+      contents: read
       actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: true
@@ -100,8 +100,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
       actions: read
+      id-token: write
       attestations: write
     uses: complytime/org-infra/.github/workflows/reusable_push_ghcr.yml@main
     with:
@@ -121,8 +121,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
       actions: read
+      id-token: write
       attestations: write
     uses: complytime/org-infra/.github/workflows/reusable_push_ghcr.yml@main
     with:
@@ -144,11 +144,11 @@ jobs:
     needs: [build-compass]
     if: ${{ always() && needs.build-compass.result == 'success' }}
     permissions:
-      contents: read          # reusable may checkout for config
-      packages: write         # pull image from GHCR
-      security-events: write  # upload SARIF results
-      id-token: write         # OIDC for registry auth
-      actions: read           # required by osv_scanner nested job
+      contents: read
+      actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
@@ -164,11 +164,11 @@ jobs:
     needs: [build-beacon-distro]
     if: ${{ always() && needs.build-beacon-distro.result == 'success' }}
     permissions:
-      contents: read          # reusable may checkout for config
-      packages: write         # pull image from GHCR
-      security-events: write  # upload SARIF results
-      id-token: write         # OIDC for registry auth
-      actions: read           # required by osv_scanner nested job
+      contents: read
+      actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@main
     with:
       enable_osv: false
@@ -211,11 +211,11 @@ jobs:
     secrets: inherit
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # STAGE 5: SUMMARY (provides unified status)
+  # STAGE 5: SUMMARY (optional - provides unified status)
   # ═══════════════════════════════════════════════════════════════════════════
   summary:
     name: Pipeline Summary
-    needs: [scan-source, build-compass, build-beacon-distro, scan-image-compass, scan-image-beacon-distro, sign-compass, sign-beacon-distro]
+    needs: [sign-compass, sign-beacon-distro]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -223,39 +223,36 @@ jobs:
     steps:
       - name: Generate Summary
         env:
-          R_SRC: ${{ needs.scan-source.result }}
-          R_B1: ${{ needs.build-compass.result }}
-          R_B2: ${{ needs.build-beacon-distro.result }}
-          R_S1: ${{ needs.scan-image-compass.result }}
-          R_S2: ${{ needs.scan-image-beacon-distro.result }}
-          R_G1: ${{ needs.sign-compass.result }}
-          R_G2: ${{ needs.sign-beacon-distro.result }}
+          COMPASS_BUILD: ${{ needs.build-compass.result }}
+          COMPASS_SCAN: ${{ needs.scan-image-compass.result }}
+          COMPASS_SIGN: ${{ needs.sign-compass.result }}
+          BEACON_BUILD: ${{ needs.build-beacon-distro.result }}
+          BEACON_SCAN: ${{ needs.scan-image-beacon-distro.result }}
+          BEACON_SIGN: ${{ needs.sign-beacon-distro.result }}
         run: |
-          icon() { case "$1" in success) echo "✅";; skipped) echo "⏭️";; *) echo "❌";; esac; }
+          echo "## 🚀 Image Publish Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Build | Scan | Sign |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|------|------|" >> $GITHUB_STEP_SUMMARY
           
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## 🚀 Image Pipeline Summary
+          status_icon() {
+            case "$1" in
+              success) echo "✅" ;;
+              skipped) echo "⏭️" ;;
+              *) echo "❌" ;;
+            esac
+          }
           
-          | Stage | Compass | Beacon Distro |
-          |-------|---------|---------------|
-          | Source Scan | $(icon $R_SRC) | $(icon $R_SRC) |
-          | Build | $(icon $R_B1) | $(icon $R_B2) |
-          | Image Scan | $(icon $R_S1) | $(icon $R_S2) |
-          | Sign | $(icon $R_G1) | $(icon $R_G2) |
-          EOF
-          if [[ "$R_B1" != "success" && "$R_B1" != "skipped" ]] || \
-             [[ "$R_B2" != "success" && "$R_B2" != "skipped" ]]; then
-            echo "⚠️ **One or more components failed.**" >> $GITHUB_STEP_SUMMARY
+          echo "| Compass | $(status_icon $COMPASS_BUILD) | $(status_icon $COMPASS_SCAN) | $(status_icon $COMPASS_SIGN) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Beacon Distro | $(status_icon $BEACON_BUILD) | $(status_icon $BEACON_SCAN) | $(status_icon $BEACON_SIGN) |" >> $GITHUB_STEP_SUMMARY
+          
+          # Fail if any critical step failed
+          if [[ "$COMPASS_BUILD" != "success" && "$COMPASS_BUILD" != "skipped" ]] || \
+             [[ "$BEACON_BUILD" != "success" && "$BEACON_BUILD" != "skipped" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **One or more components failed to build.**" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-          cat >> $GITHUB_STEP_SUMMARY << EOF
           
-          ✅ **Pipeline completed successfully.**
-          
-          ### 🔒 Security Checks Passed
-          - Secret scanning
-          - Vulnerability scanning
-          - SBOM generated
-          - Provenance attestation
-          - Image signed and verified
-          EOF
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **All components processed successfully.**" >> $GITHUB_STEP_SUMMARY
