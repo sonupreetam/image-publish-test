@@ -3,7 +3,7 @@ module github.com/complytime/complybeacon/proofwatch
 go 1.24.13
 
 require (
-	github.com/Santiago-Labs/go-ocsf v0.1.1-0.20250729170529-8b19b43949a6
+	github.com/Santiago-Labs/go-ocsf v0.2.1
 	github.com/ossf/gemara v0.12.1
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/pdata v1.51.0
