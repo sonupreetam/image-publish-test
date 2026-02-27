@@ -20,8 +20,10 @@ jobs:
     name: OSV-Scanner
     permissions:
       contents: read
-      actions: read           # Needed to upload SARIF file to CodeQL. See: https://github.com/github/codeql-action/issues/2117
-      security-events: write  # Needed to upload the results to code-scanning dashboard.
+      actions: read
+      packages: write
+      security-events: write
+      id-token: write
     uses: sonupreetam/org-infra-tests/.github/workflows/reusable_vuln_scan.yml@main
 
   call_reusable_security:
