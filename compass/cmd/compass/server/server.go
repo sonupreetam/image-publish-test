@@ -12,9 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	middleware "github.com/oapi-codegen/gin-middleware"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
-	httpmw "github.com/sonupreetam/image-publish-test/compass/internal/middleware"
-	compass "github.com/sonupreetam/image-publish-test/compass/service"
+	"github.com/complytime/complybeacon/compass/api"
+	httpmw "github.com/complytime/complybeacon/compass/internal/middleware"
+	compass "github.com/complytime/complybeacon/compass/service"
 )
 
 func NewGinServer(service *compass.Service, port string) *http.Server {

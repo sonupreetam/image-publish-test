@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
 )
 
 func TestApplier_Extract(t *testing.T) {

@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/sonupreetam/image-publish-test/compass/mapper/plugins/basic"
+	"github.com/complytime/complybeacon/compass/mapper/plugins/basic"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/ossf/gemara/layer2"
 	"github.com/ossf/gemara/layer4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
-	"github.com/sonupreetam/image-publish-test/compass/mapper"
+	"github.com/complytime/complybeacon/compass/api"
+	"github.com/complytime/complybeacon/compass/mapper"
 )
 
 func TestNewService(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"github.com/ossf/gemara/layer4"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
-	"github.com/sonupreetam/image-publish-test/compass/mapper"
+	"github.com/complytime/complybeacon/compass/api"
+	"github.com/complytime/complybeacon/compass/mapper"
 )
 
 func TestNewBasicMapper(t *testing.T) {

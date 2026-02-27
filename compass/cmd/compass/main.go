@@ -8,9 +8,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/sonupreetam/image-publish-test/compass/cmd/compass/server"
-	"github.com/sonupreetam/image-publish-test/compass/internal/logging"
-	compass "github.com/sonupreetam/image-publish-test/compass/service"
+	"github.com/complytime/complybeacon/compass/cmd/compass/server"
+	"github.com/complytime/complybeacon/compass/internal/logging"
+	compass "github.com/complytime/complybeacon/compass/service"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"github.com/ossf/gemara/layer2"
 	"github.com/ossf/gemara/layer4"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
+	"github.com/complytime/complybeacon/compass/api"
 )
 
 // Mapper defines a set of methods a plugin must implement for

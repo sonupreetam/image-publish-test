@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.uber.org/zap"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/applier"
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/applier"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
 )
 
 type truthBeamProcessor struct {

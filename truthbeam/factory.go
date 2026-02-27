@@ -10,8 +10,8 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/metadata"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/metadata"
 )
 
 var processorCapabilities = consumer.Capabilities{MutatesData: true}

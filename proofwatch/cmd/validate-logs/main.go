@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/sonupreetam/image-publish-test/proofwatch"
+	"github.com/complytime/complybeacon/proofwatch"
 )
 
 // generateGemaraLog creates a sample Gemara log record with compliance attributes
@@ -82,7 +82,7 @@ func createLogFromAttributes(attrs []attribute.KeyValue, body []byte) plog.Logs 
 
 	sl := rl.ScopeLogs().AppendEmpty()
 	scope := sl.Scope()
-	scope.SetName("github.com/sonupreetam/image-publish-test/proofwatch")
+	scope.SetName("github.com/complytime/complybeacon/proofwatch")
 
 	lr := sl.LogRecords().AppendEmpty()
 	lr.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))

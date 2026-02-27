@@ -7,7 +7,7 @@ import (
 	"github.com/ossf/gemara/layer4"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
+	"github.com/complytime/complybeacon/compass/api"
 )
 
 // mockMapper is a test implementation of the Mapper interface

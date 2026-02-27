@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/applier"
+	"github.com/complytime/complybeacon/truthbeam/internal/applier"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/collector/processor/processortest"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
 )
 
 // The processor tests validate the core processor functionality including log processing,

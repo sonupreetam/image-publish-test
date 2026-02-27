@@ -11,12 +11,12 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/sonupreetam/image-publish-test/proofwatch/internal/metrics"
+	"github.com/complytime/complybeacon/proofwatch/internal/metrics"
 )
 
 const (
 	// ScopeName is the instrumentation scope name.
-	ScopeName = "github.com/sonupreetam/image-publish-test/proofwatch"
+	ScopeName = "github.com/complytime/complybeacon/proofwatch"
 )
 
 type ProofWatch struct {

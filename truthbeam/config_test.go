@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/config/confighttp"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
 )
 
 // The config tests are table-driven tests to validate configuration validation

@@ -7,9 +7,9 @@ import (
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
-	"github.com/sonupreetam/image-publish-test/compass/mapper"
-	"github.com/sonupreetam/image-publish-test/compass/mapper/plugins/basic"
+	"github.com/complytime/complybeacon/compass/api"
+	"github.com/complytime/complybeacon/compass/mapper"
+	"github.com/complytime/complybeacon/compass/mapper/plugins/basic"
 )
 
 // Service struct to hold dependencies if needed

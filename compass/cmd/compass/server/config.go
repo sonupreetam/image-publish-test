@@ -11,8 +11,8 @@ import (
 	"github.com/ossf/gemara/layer2"
 	"github.com/ossf/gemara/layer4"
 
-	"github.com/sonupreetam/image-publish-test/compass/mapper"
-	"github.com/sonupreetam/image-publish-test/compass/mapper/factory"
+	"github.com/complytime/complybeacon/compass/mapper"
+	"github.com/complytime/complybeacon/compass/mapper/factory"
 )
 
 func NewScopeFromCatalogPath(catalogPath string) (mapper.Scope, error) {

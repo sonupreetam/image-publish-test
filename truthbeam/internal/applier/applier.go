@@ -7,7 +7,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 
-	"github.com/sonupreetam/image-publish-test/truthbeam/internal/client"
+	"github.com/complytime/complybeacon/truthbeam/internal/client"
 )
 
 // Applier handles the application of enrichment data to log records

@@ -6,8 +6,8 @@ import (
 	"github.com/ossf/gemara/layer2"
 	"github.com/ossf/gemara/layer4"
 
-	"github.com/sonupreetam/image-publish-test/compass/api"
-	"github.com/sonupreetam/image-publish-test/compass/mapper"
+	"github.com/complytime/complybeacon/compass/api"
+	"github.com/complytime/complybeacon/compass/mapper"
 )
 
 // ProcedureInfo represents information about a procedure including its control and requirement IDs
