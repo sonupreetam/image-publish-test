@@ -2,7 +2,7 @@ module github.com/sonupreetam/image-publish-test/proofwatch
 
 go 1.24.0
 
-toolchain go1.24.5
+toolchain go1.26.0
 
 require (
 	github.com/Santiago-Labs/go-ocsf v0.1.1-0.20250729170529-8b19b43949a6

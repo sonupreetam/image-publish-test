@@ -2,7 +2,7 @@ module github.com/sonupreetam/image-publish-test/compass
 
 go 1.24.0
 
-toolchain go1.24.5
+toolchain go1.26.0
 
 require (
 	github.com/getkin/kin-openapi v0.133.0
