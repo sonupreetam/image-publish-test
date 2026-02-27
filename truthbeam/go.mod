@@ -14,8 +14,8 @@ require (
 	go.opentelemetry.io/collector/consumer v1.52.0
 	go.opentelemetry.io/collector/pdata v1.52.0
 	go.opentelemetry.io/collector/processor v1.52.0
-	go.opentelemetry.io/collector/processor/processorhelper v0.144.0
-	go.opentelemetry.io/collector/processor/processortest v0.144.0
+	go.opentelemetry.io/collector/processor/processorhelper v0.146.1
+	go.opentelemetry.io/collector/processor/processortest v0.146.1
 	go.uber.org/zap v1.27.1
 )
 
@@ -62,7 +62,7 @@ require (
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/client v1.52.0 // indirect
-	go.opentelemetry.io/collector/component/componentstatus v0.144.0 // indirect
+	go.opentelemetry.io/collector/component/componentstatus v0.146.1 // indirect
 	go.opentelemetry.io/collector/config/configauth v1.52.0 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.52.0 // indirect
 	go.opentelemetry.io/collector/config/configmiddleware v1.52.0 // indirect
@@ -81,7 +81,7 @@ require (
 	go.opentelemetry.io/collector/pdata/pprofile v0.146.1 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.146.1 // indirect
 	go.opentelemetry.io/collector/pipeline v1.52.0 // indirect
-	go.opentelemetry.io/collector/processor/xprocessor v0.144.0 // indirect
+	go.opentelemetry.io/collector/processor/xprocessor v0.146.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/otel v1.40.0 // indirect
 	go.opentelemetry.io/otel/metric v1.40.0 // indirect
