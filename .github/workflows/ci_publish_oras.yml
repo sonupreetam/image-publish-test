@@ -1,0 +1,95 @@
+# ORAS OCI Artifact Publish POC
+# ==============================
+# End-to-end test of reusable_publish_oras.yml + reusable_sign_and_verify.yml
+# from sonupreetam/org-infra-tests.
+#
+# Publishes test-policies/ as a multi-layer OCI artifact to GHCR using ORAS,
+# attaches SLSA provenance + SPDX SBOM, then signs and verifies.
+#
+# Skips vuln attestation verification (enable_verify_vuln: false) since
+# data-only OCI artifacts have no vuln scan (tracked: org-infra#173).
+
+name: Publish ORAS OCI Artifact (POC)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'test-policies/**'
+      - '.github/workflows/ci_publish_oras.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: none
+  packages: none
+  id-token: none
+  attestations: none
+  actions: none
+
+concurrency:
+  group: publish-oras-poc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish Gemara Test Policies (ORAS)
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_publish_oras.yml@main
+    with:
+      image_name: sonupreetam/test-gemara-policies
+      artifact_type: application/vnd.complytime.gemara.policies.v1
+      paths: |
+        test-policies/catalog.yaml:application/vnd.gemara.catalog.v1+yaml
+        test-policies/policy.yaml:application/vnd.gemara.policy.v1+yaml
+      image_description: Test Gemara policies — ORAS publish POC
+      sbom_scan_path: test-policies
+    secrets: inherit
+
+  sign:
+    name: Sign and Verify Artifact
+    needs: [publish]
+    permissions:
+      packages: write
+      id-token: write
+    uses: sonupreetam/org-infra-tests/.github/workflows/reusable_sign_and_verify.yml@main
+    with:
+      image_name: ${{ needs.publish.outputs.image }}
+      digest: ${{ needs.publish.outputs.digest }}
+      allowed_identity_regex: https://github.com/sonupreetam/org-infra-tests(/.*)?
+      enable_verify_vuln: false
+    secrets: inherit
+
+  summary:
+    name: Pipeline Summary
+    needs: [publish, sign]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Write summary
+        env:
+          R_PUBLISH: ${{ needs.publish.result }}
+          R_SIGN: ${{ needs.sign.result }}
+          DIGEST: ${{ needs.publish.outputs.digest }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          SHA_TAG: ${{ needs.publish.outputs.sha_tag }}
+        run: |
+          icon() { case "$1" in success) echo "✅";; skipped) echo "⏭️";; *) echo "❌";; esac; }
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## ORAS OCI Artifact Publish POC
+
+          | Stage | Result |
+          |-------|--------|
+          | Publish (ORAS + SLSA + SBOM) | $(icon $R_PUBLISH) |
+          | Sign and Verify (Sigstore) | $(icon $R_SIGN) |
+
+          ### Artifact
+          - **Image**: \`${IMAGE}\`
+          - **Tag**: \`${SHA_TAG}\`
+          - **Digest**: \`${DIGEST}\`
+          EOF
