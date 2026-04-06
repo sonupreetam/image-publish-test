@@ -1,0 +1,42 @@
+# Minimal Gemara catalog for ORAS publish POC
+# Media type: application/vnd.gemara.catalog.v1+yaml
+title: ORAS Publish POC Catalog
+metadata:
+  id: oras-poc-catalog
+  description: Minimal test catalog for validating the reusable_publish_oras.yml workflow
+  author:
+    id: sonupreetam
+    name: Sonu Preetam
+    type: Human
+families:
+  - id: oci-supply-chain
+    title: OCI Supply Chain
+    description: Controls for OCI artifact supply-chain integrity
+controls:
+  - id: OSC-1
+    title: OCI Artifact Provenance
+    objective: Ensure OCI artifacts carry verifiable SLSA provenance attestation
+    family: oci-supply-chain
+    assessment-requirements:
+      - id: OSC-1-ar
+        text: All OCI artifacts pushed to GHCR MUST have a SLSA provenance attestation
+        applicability:
+          - All OCI registries
+  - id: OSC-2
+    title: OCI Artifact SBOM
+    objective: Ensure OCI artifacts carry a verifiable SPDX SBOM attestation
+    family: oci-supply-chain
+    assessment-requirements:
+      - id: OSC-2-ar
+        text: All OCI artifacts pushed to GHCR MUST have a SPDX SBOM attestation
+        applicability:
+          - All OCI registries
+  - id: OSC-3
+    title: OCI Artifact Signing
+    objective: Ensure OCI artifacts are signed with Sigstore keyless signing
+    family: oci-supply-chain
+    assessment-requirements:
+      - id: OSC-3-ar
+        text: All OCI artifacts pushed to GHCR MUST be signed via cosign keyless signing
+        applicability:
+          - All OCI registries
