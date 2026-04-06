@@ -1,0 +1,48 @@
+# Minimal Gemara policy for ORAS publish POC
+# Media type: application/vnd.gemara.policy.v1+yaml
+title: ORAS Publish POC Policy
+metadata:
+  id: oras-poc-policy
+  description: Minimal test policy for validating the reusable_publish_oras.yml workflow
+  author:
+    id: sonupreetam
+    name: Sonu Preetam
+    type: Software
+  mapping-references:
+    - id: oras-poc-catalog
+      title: ORAS Publish POC Catalog
+contacts:
+  responsible:
+    - name: Sonu Preetam
+  accountable:
+    - name: ComplyTime
+scope:
+  in:
+    technologies:
+      - GitHub Actions
+imports:
+  catalogs:
+    - reference-id: oras-poc-catalog
+adherence:
+  evaluation-methods:
+    - type: automated
+      executor:
+        id: github-actions
+        name: GitHub Actions
+        type: Software
+  assessment-plans:
+    - id: OSC-1-impl
+      requirement-id: OSC-1-ar
+      frequency: on-demand
+      evaluation-methods:
+        - type: automated
+    - id: OSC-2-impl
+      requirement-id: OSC-2-ar
+      frequency: on-demand
+      evaluation-methods:
+        - type: automated
+    - id: OSC-3-impl
+      requirement-id: OSC-3-ar
+      frequency: on-demand
+      evaluation-methods:
+        - type: automated
