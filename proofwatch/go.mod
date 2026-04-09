@@ -1,18 +1,18 @@
 module github.com/complytime/complybeacon/proofwatch
 
-go 1.24.13
+go 1.25.0
 
 require (
 	github.com/Santiago-Labs/go-ocsf v0.1.1-0.20250729170529-8b19b43949a6
 	github.com/ossf/gemara v0.12.1
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/pdata v1.51.0
-	go.opentelemetry.io/otel v1.40.0
+	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/log v0.16.0
-	go.opentelemetry.io/otel/metric v1.40.0
+	go.opentelemetry.io/otel/metric v1.43.0
 	go.opentelemetry.io/otel/sdk v1.40.0
 	go.opentelemetry.io/otel/sdk/metric v1.40.0
-	go.opentelemetry.io/otel/trace v1.40.0
+	go.opentelemetry.io/otel/trace v1.43.0
 )
 
 require (
